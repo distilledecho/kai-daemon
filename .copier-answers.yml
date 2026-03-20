@@ -1,0 +1,17 @@
+# Changes here will be overwritten by Copier
+_commit: 5.0.2
+_src_path: https://github.com/DiamondLightSource/python-copier-template.git
+author_email: hyperrealist@pm.me
+author_name: hyperrealist
+description: The daemon — persistent memory, background workflows, and inner life
+    pipeline
+distribution_name: kai-daemon
+docker: false
+docs_type: sphinx
+git_platform: github.com
+github_org: distilledecho
+package_name: kai_daemon
+pypi: false
+repo_name: kai-daemon
+strict_typing: true
+type_checker: pyright
