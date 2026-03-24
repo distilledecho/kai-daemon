@@ -12,7 +12,7 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
 ]
 description = "The daemon — persistent memory, background workflows, and inner life pipeline"
-dependencies = [] # Add project dependencies here, e.g. ["click", "numpy"]
+dependencies = ["pydantic>=2.0", "pyyaml>=6.0"]
 dynamic = ["version"]
 license.file = "LICENSE"
 readme = "README.md"

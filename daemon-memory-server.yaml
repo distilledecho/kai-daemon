@@ -1,0 +1,20 @@
+# daemon-memory-server connection and retrieval configuration.
+
+connection:
+  host: "localhost"
+  port: 8765                        # adjust to actual server port
+  timeout_seconds: 10
+
+embedding:
+  model: "mlx-community/nomicai-modernbert-embed-base"
+  dimension: 768
+
+retrieval:
+  recency_halflife_days: 180
+  recency_floor: 0.3
+  shared_floor_score: 0.7
+  default_top_k: 5
+
+contradiction:
+  similarity_threshold: 0.85        # minimum similarity to consider conflict candidate
+  detection_batch_size: 50          # N writes that trigger threshold-based detection
