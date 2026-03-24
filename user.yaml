@@ -1,0 +1,41 @@
+# User configuration — read at runtime, never hardcoded in source.
+# daemon_name is the only place the daemon's name appears.
+
+daemon_name: ""                     # set before first run
+
+timezone: "GMT"                     # IANA timezone string; updated by frontend on connect
+transcript_retention_days: -1       # -1 = keep forever; positive int = days to retain
+
+session:
+  inactivity_gap_minutes: 30        # gap that ends a session
+
+thread_stack:
+  recency_decay: 0.85
+  recency_floor: 0.20
+  depth_decay: 0.95
+  depth_boost_reference: 0.10
+  depth_boost_stance: 0.20
+  recency_weight: 0.60
+  depth_weight: 0.40
+  drop_threshold: 0.30
+  floating_depth_decay: 0.99
+  floating_recency_floor: 0.50
+  floating_drop_threshold: 0.45
+  floating_max_turns_unresolved: 20
+
+register_thresholds:
+  developing:
+    documents: 20
+    daemon_self_versions: 1
+    daemon_relational_versions: 10
+  rich:
+    documents: 100
+    daemon_self_versions: 3
+    daemon_relational_versions: 30
+
+inner_life:
+  bypass_valve_rate: 0.12           # fraction of filter outputs that pass unfiltered
+  prompt_rotation: [A, B, C, D, E]  # A–E rotation; PROMPT_F fires automatically at 14d
+  prompt_f_threshold_days: 14       # days since last development before PROMPT_F fires
+  push_ceiling_days: 7              # enforced in code before push evaluation prompt runs
+  borderline_expiry_days: 30        # BORDERLINE items auto-expire after this many days
