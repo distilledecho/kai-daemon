@@ -18,7 +18,6 @@ from kai_daemon.state.daemon_relational import (
     _truncate_overflow,
     _yaml_text,
 )
-from kai_daemon.state.daemon_self import DaemonSelf
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -262,28 +261,22 @@ def test_no_chroma_write_when_client_is_none(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_daemon_relational_store_has_no_self_return_type() -> None:
-    """DaemonRelationalStore must not expose any method returning DaemonSelf."""
-    for _name, method in inspect.getmembers(
+def test_daemon_relational_store_has_no_self_type_references() -> None:
+    """No annotation in DaemonRelationalStore may reference DaemonSelf.
+
+    Under ``from __future__ import annotations`` (PEP 563), annotations are
+    stored as strings, not as live type objects.  Identity checks against the
+    class (``hint is not DaemonSelf``) always pass regardless of what is
+    written in source.  We check the string representation directly instead,
+    which correctly catches return types, parameter types, and nested forms
+    such as ``Optional[DaemonSelf]``.
+    """
+    for name, method in inspect.getmembers(
         DaemonRelationalStore, predicate=inspect.isfunction
     ):
-        hints = method.__annotations__
-        for hint_value in hints.values():
-            assert hint_value is not DaemonSelf, (
-                f"DaemonRelationalStore.{_name} has a DaemonSelf annotation — "
-                "this violates the structural separation constraint"
-            )
-
-
-def test_daemon_relational_store_has_no_self_parameter() -> None:
-    """DaemonRelationalStore must not accept DaemonSelf as a parameter."""
-    for _name, method in inspect.getmembers(
-        DaemonRelationalStore, predicate=inspect.isfunction
-    ):
-        sig = inspect.signature(method)
-        for param in sig.parameters.values():
-            assert param.annotation is not DaemonSelf, (
-                f"DaemonRelationalStore.{_name} accepts DaemonSelf — "
+        for annotation_str in method.__annotations__.values():
+            assert "DaemonSelf" not in str(annotation_str), (
+                f"DaemonRelationalStore.{name} references DaemonSelf — "
                 "this violates the structural separation constraint"
             )
 
