@@ -267,3 +267,46 @@ class TestQueries:
     def test_read_missing_note_raises_key_error(self, store: ScratchStore) -> None:
         with pytest.raises(KeyError):
             store.read("nonexistent-id")
+
+    def test_list_active_empty_store(self, store: ScratchStore) -> None:
+        assert store.list_active() == []
+
+
+# ---------------------------------------------------------------------------
+# update_content
+# ---------------------------------------------------------------------------
+
+
+class TestUpdateContent:
+    def test_update_mutable_fields(self, store: ScratchStore) -> None:
+        note = store.write(make_note(content="original", target_workflow=None))
+        updated = store.update_content(
+            note.id,
+            content="updated",
+            ttl="2099-01-01T00:00:00+00:00",
+            target_workflow="some_workflow",
+        )
+        assert updated.content == "updated"
+        assert updated.ttl == "2099-01-01T00:00:00+00:00"
+        assert updated.target_workflow == "some_workflow"
+
+    def test_update_lifecycle_raises(self, store: ScratchStore) -> None:
+        note = store.write(make_note())
+        with pytest.raises(ValueError, match="immutable"):
+            store.update_content(note.id, lifecycle="archived")
+
+    def test_update_acknowledged_by_raises(self, store: ScratchStore) -> None:
+        note = store.write(make_note())
+        with pytest.raises(ValueError, match="immutable"):
+            store.update_content(note.id, acknowledged_by=["workflow_a"])
+
+
+# ---------------------------------------------------------------------------
+# TTL validation
+# ---------------------------------------------------------------------------
+
+
+class TestTTLValidation:
+    def test_malformed_ttl_raises_at_construction(self) -> None:
+        with pytest.raises(ValidationError):
+            make_note(ttl="not-a-date")

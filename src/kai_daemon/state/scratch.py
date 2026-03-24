@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from ._paths import daemon_state_dir
 
@@ -66,6 +66,19 @@ class ScratchNote(BaseModel):
     epistemic_origin: EpistemicOrigin
     thread_ids: list[str] = Field(default_factory=list)
 
+    @field_validator("ttl", mode="before")
+    @classmethod
+    def _validate_ttl(cls, v: object) -> object:
+        if v is None:
+            return v
+        try:
+            datetime.fromisoformat(str(v))
+        except ValueError as err:
+            raise ValueError(
+                f"ttl must be a valid ISO-8601 datetime string, got {v!r}"
+            ) from err
+        return v
+
     model_config = ConfigDict(frozen=True)
 
 
@@ -75,7 +88,7 @@ class ScratchStore:
     ``epistemic_origin`` is fixed at write time and cannot be changed.
     ``lifecycle`` moves only forward: ``active`` → ``archived``.
 
-    Thread-safe for single-process use (no external locking).
+    Not thread-safe; assumes single-writer.
     """
 
     def __init__(self, path: Path | None = None) -> None:
@@ -168,7 +181,15 @@ class ScratchStore:
     # ------------------------------------------------------------------
 
     _IMMUTABLE_FIELDS = frozenset(
-        {"id", "workflow_id", "session_id", "timestamp", "epistemic_origin"}
+        {
+            "id",
+            "workflow_id",
+            "session_id",
+            "timestamp",
+            "epistemic_origin",
+            "lifecycle",
+            "acknowledged_by",
+        }
     )
 
     def update_content(self, note_id: str, **kwargs: Any) -> ScratchNote:

@@ -153,7 +153,7 @@ data/
     workflow_runs.jsonl        # observability log — one entry per workflow run
     register_inference.jsonl   # register inference history
 
-src/daemon/
+src/kai_daemon/
   tools/                       # all tool implementations
   workflows/                   # all 29 workflow implementations
 
