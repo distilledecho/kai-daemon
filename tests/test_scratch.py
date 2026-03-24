@@ -14,6 +14,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from kai_daemon.state.scratch import (
     EpistemicOrigin,
@@ -63,6 +64,20 @@ class TestEpistemicOriginImmutability:
             store.update_content(
                 note.id, epistemic_origin=EpistemicOrigin.EXTERNAL_SEARCH
             )
+
+    def test_origin_immutable_at_model_level_direct_assignment(
+        self, store: ScratchStore
+    ) -> None:
+        """frozen=True blocks direct assignment, not just store.update_content."""
+        note = store.write(make_note(epistemic_origin=EpistemicOrigin.INTERNAL))
+        with pytest.raises(ValidationError):
+            note.epistemic_origin = EpistemicOrigin.EXTERNAL_SEARCH  # type: ignore[misc]
+
+    def test_all_fields_immutable_at_model_level(self, store: ScratchStore) -> None:
+        """frozen=True covers all fields, not just epistemic_origin."""
+        note = store.write(make_note())
+        with pytest.raises(ValidationError):
+            note.content = "mutated"  # type: ignore[misc]
 
     def test_all_origin_values_accepted_at_write(self, store: ScratchStore) -> None:
         for origin in EpistemicOrigin:

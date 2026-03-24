@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from ._paths import daemon_state_dir
 
@@ -66,7 +66,7 @@ class ScratchNote(BaseModel):
     epistemic_origin: EpistemicOrigin
     thread_ids: list[str] = Field(default_factory=list)
 
-    model_config = {"frozen": False}
+    model_config = ConfigDict(frozen=True)
 
 
 class ScratchStore:
