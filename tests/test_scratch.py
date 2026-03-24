@@ -310,3 +310,13 @@ class TestTTLValidation:
     def test_malformed_ttl_raises_at_construction(self) -> None:
         with pytest.raises(ValidationError):
             make_note(ttl="not-a-date")
+
+    def test_non_utc_offset_rejected(self) -> None:
+        with pytest.raises(ValidationError):
+            make_note(ttl="2000-01-01T00:00:00+02:00")
+
+    def test_past_utc_offset_string_expires(self, store: ScratchStore) -> None:
+        note = store.write(make_note(ttl="2000-01-01T00:00:00+00:00"))
+        count = store.expire_ttl()
+        assert count == 1
+        assert store.read(note.id).lifecycle == Lifecycle.ARCHIVED

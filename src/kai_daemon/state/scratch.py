@@ -72,11 +72,13 @@ class ScratchNote(BaseModel):
         if v is None:
             return v
         try:
-            datetime.fromisoformat(str(v))
+            dt = datetime.fromisoformat(str(v))
         except ValueError as err:
             raise ValueError(
                 f"ttl must be a valid ISO-8601 datetime string, got {v!r}"
             ) from err
+        if dt.utcoffset() is None or dt.utcoffset().total_seconds() != 0:  # type: ignore[union-attr]
+            raise ValueError(f"ttl must be UTC (offset +00:00), got {v!r}")
         return v
 
     model_config = ConfigDict(frozen=True)
@@ -235,13 +237,13 @@ class ScratchStore:
 
         Returns the count of notes archived.
         """
-        now = _utcnow()
+        now = datetime.now(UTC)
         count = 0
         for note in list(self._notes.values()):
             if (
                 note.ttl is not None
                 and note.lifecycle == Lifecycle.ACTIVE
-                and note.ttl < now
+                and datetime.fromisoformat(note.ttl) < now
             ):
                 self.archive(note.id)
                 count += 1
