@@ -12,7 +12,7 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
 ]
 description = "The daemon — persistent memory, background workflows, and inner life pipeline"
-dependencies = ["pydantic>=2.0", "pyyaml>=6.0"]
+dependencies = ["chromadb>=0.5", "pydantic>=2.0", "pyyaml>=6.0", "tiktoken>=0.7"]
 dynamic = ["version"]
 license.file = "LICENSE"
 readme = "README.md"
@@ -51,6 +51,7 @@ version_file = "src/kai_daemon/_version.py"
 [tool.pyright]
 typeCheckingMode = "strict"
 reportMissingImports = false # Ignore missing stubs in imported modules
+reportPrivateUsage = false   # ruff SLF001 enforces this with correct test/source granularity
 
 [tool.pytest.ini_options]
 # Run pytest with all our checkers, and don't spam us with massive tracebacks on error
