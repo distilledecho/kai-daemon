@@ -22,12 +22,7 @@ import yaml
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from ._paths import daemon_state_dir
-
-_FORCED_SURFACE_DAYS: dict[str, int | None] = {
-    "high": 7,
-    "medium": 21,
-    "low": None,
-}
+from ._types import EpistemicOrigin
 
 
 def _utcnow() -> str:
@@ -61,10 +56,11 @@ class Urgency(StrEnum):
     HIGH = "high"
 
 
-class EpistemicOrigin(StrEnum):
-    INTERNAL = "internal"
-    EXTERNAL_SEARCH = "external_search"
-    INNER_LIFE_PIPELINE = "inner_life_pipeline"
+_FORCED_SURFACE_DAYS: dict[Urgency, int | None] = {
+    Urgency.HIGH: 7,
+    Urgency.MEDIUM: 21,
+    Urgency.LOW: None,
+}
 
 
 # ---------------------------------------------------------------------------
@@ -82,7 +78,6 @@ class HoldingItem(BaseModel):
     register_needed: RegisterNeeded
     urgency: Urgency
     created: str = Field(default_factory=_utcnow)
-    expires: str | None = None
     surfaced: str | None = None
     discharge_notes: str | None = None
     source_workflow: str
@@ -151,7 +146,7 @@ class HoldingStore:
         if item.id in self._items:
             raise ValueError(
                 f"Holding item {item.id!r} already exists. "
-                "Use discharge() to mark it surfaced."
+                "Each HoldingItem must have a unique ID."
             )
         self._items[item.id] = item
         self._save()

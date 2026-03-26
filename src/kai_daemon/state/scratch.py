@@ -19,6 +19,7 @@ import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from ._paths import daemon_state_dir
+from ._types import EpistemicOrigin
 
 
 class ScratchType(StrEnum):
@@ -36,14 +37,6 @@ class Lifecycle(StrEnum):
 
     ACTIVE = "active"
     ARCHIVED = "archived"
-
-
-class EpistemicOrigin(StrEnum):
-    """Where this item originated. Set at write time; immutable thereafter."""
-
-    INTERNAL = "internal"
-    EXTERNAL_SEARCH = "external_search"
-    INNER_LIFE_PIPELINE = "inner_life_pipeline"
 
 
 def _utcnow() -> str:
