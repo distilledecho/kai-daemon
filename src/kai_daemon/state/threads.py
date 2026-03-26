@@ -316,8 +316,8 @@ class ThreadStore:
         """Overwrite the stored thread document.
 
         The caller is responsible for building the updated ``Thread`` via
-        ``thread.model_copy(update={...})``.  If ``central_question`` has
-        changed the new embedding is stored (best-effort).
+        ``thread.model_copy(update={...})``.  Re-embeds ``central_question``
+        on every update (upsert is idempotent, best-effort).
         """
         if not self._thread_path(thread.id).exists():
             raise KeyError(f"Thread {thread.id!r} not found")

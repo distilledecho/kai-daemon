@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import inspect
+import tempfile
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock
@@ -378,8 +379,6 @@ def test_handoff_note_embedded_in_chroma():
     mock_cq = MagicMock()
     mock_hn = MagicMock()
     mock_chroma.get_or_create_collection.side_effect = [mock_cq, mock_hn]
-    import tempfile
-
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp = Path(tmpdir)
         s = ThreadStore(
@@ -411,8 +410,6 @@ def test_central_question_embedded_on_create():
     mock_cq = MagicMock()
     mock_hn = MagicMock()
     mock_chroma.get_or_create_collection.side_effect = [mock_cq, mock_hn]
-    import tempfile
-
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp = Path(tmpdir)
         s = ThreadStore(
@@ -538,8 +535,6 @@ def test_chroma_failure_does_not_block_create():
     mock_hn = MagicMock()
     mock_cq.upsert.side_effect = RuntimeError("server down")
     mock_chroma.get_or_create_collection.side_effect = [mock_cq, mock_hn]
-    import tempfile
-
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp = Path(tmpdir)
         s = ThreadStore(
@@ -559,8 +554,6 @@ def test_chroma_failure_does_not_block_handoff_note():
     mock_hn = MagicMock()
     mock_hn.upsert.side_effect = RuntimeError("server down")
     mock_chroma.get_or_create_collection.side_effect = [mock_cq, mock_hn]
-    import tempfile
-
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp = Path(tmpdir)
         s = ThreadStore(
