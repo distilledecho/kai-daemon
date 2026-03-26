@@ -8,8 +8,8 @@ from typing import Any
 
 import pytest
 
+from kai_daemon.state._types import EpistemicOrigin
 from kai_daemon.state.holding import (
-    EpistemicOrigin,
     HoldingItem,
     HoldingStore,
     HoldingType,
