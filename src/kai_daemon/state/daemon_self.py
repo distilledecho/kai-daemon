@@ -25,7 +25,6 @@ from __future__ import annotations
 
 import logging
 import warnings
-from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
 from typing import Any
@@ -36,6 +35,7 @@ from pydantic import BaseModel, Field
 
 from ._chroma import DAEMON_SELF_COLLECTION
 from ._paths import daemon_self_history_dir, daemon_state_dir
+from ._utils import _utcnow
 
 TOKEN_BUDGET = 500
 _CURRENT_FILENAME = "daemon_self.yaml"
@@ -68,10 +68,6 @@ class FascinationOrigin(StrEnum):
 # ---------------------------------------------------------------------------
 # Sub-models
 # ---------------------------------------------------------------------------
-
-
-def _utcnow() -> str:
-    return datetime.now(UTC).isoformat()
 
 
 class Fascination(BaseModel):
