@@ -50,8 +50,8 @@ Run `uv run tox` before signing off on any session. All four environments
 
 ## Architecture references
 
-Full spec: `../kai-project/docs/kai-technical.md` Stages 1–4
-Full architecture: `../kai-project/docs/kai-architecture.md`
+Full spec: `/workspaces/kai-project/docs/kai-technical.md` Stages 1–4
+Full architecture: `/workspaces/kai-project/docs/kai-architecture.md`
 
 Key sections by stage:
 - Stage 1: §4 (data layer), §4a DAEMON_SELF, §4b DAEMON_RELATIONAL,
