@@ -373,3 +373,11 @@ class TestRegisterInferenceLogger:
         assert len(entries) == 2
         assert entries[0].inferred_register == "reflective"
         assert entries[1].inferred_register == "exploratory"
+
+    def test_read_all_returns_empty_on_oserror(self, tmp_path: Path):
+        """read_all returns [] and does not raise when the file cannot be opened."""
+        # A directory at the log path causes IsADirectoryError (subclass of OSError)
+        log_path = tmp_path / "register_inference.jsonl"
+        log_path.mkdir()
+        log = RegisterInferenceLogger(log_path=log_path)
+        assert log.read_all() == []
