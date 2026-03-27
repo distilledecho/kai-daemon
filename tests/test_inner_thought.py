@@ -77,6 +77,25 @@ def test_prompt_f_fires_when_last_developed_old() -> None:
     assert "entropy" in result
 
 
+def test_prompt_f_uses_last_developed_not_last_updated() -> None:
+    """PROMPT_F threshold must check last_developed, not last_updated.
+
+    A fascination recently updated (e.g. topic text edited) but not
+    developed for 14+ days must still trigger PROMPT_F.  If the
+    implementation accidentally reads last_updated instead of
+    last_developed, this test catches it.
+    """
+    # last_updated = 1 day ago (recent), last_developed = 20 days ago (old)
+    f = _fascination(topic="confusion", last_developed_days_ago=20)
+    # Patch last_updated to be very recent so the two fields diverge clearly
+    f = f.model_copy(update={"last_updated": (_NOW - timedelta(days=1)).isoformat()})
+    result = select_prompt([f], now=_NOW, rng=_seeded_rng())
+    assert "confusion" in result, (
+        "PROMPT_F did not fire — implementation may be reading last_updated "
+        "instead of last_developed"
+    )
+
+
 def test_prompt_f_does_not_fire_when_recently_developed() -> None:
     """PROMPT_F must not fire when last_developed is < 14 days ago."""
     f = _fascination(topic="entropy", last_developed_days_ago=5)

@@ -67,6 +67,28 @@ def test_bypass_valve_fires_at_probability_1() -> None:
     assert result == FilterVerdict.KEEP
 
 
+def test_bypass_valve_inference_fn_never_called_when_bypass_fires() -> None:
+    """When the bypass valve fires, inference_fn is never called — not just ignored."""
+    calls: list[str] = []
+
+    def _fn(prompt: str) -> str:
+        calls.append(prompt)
+        return "DISCARD"
+
+    rng = random.Random(0)
+    result = daemon_inner_thought_filter(
+        "some thought",
+        inference_fn=_fn,
+        bypass_probability=1.0,
+        rng=rng,
+    )
+    assert result == FilterVerdict.KEEP
+    assert calls == [], (
+        "inference_fn was called despite bypass firing — "
+        "bypass must short-circuit before the inference call"
+    )
+
+
 def test_bypass_valve_never_fires_at_probability_0() -> None:
     """bypass_probability=0.0 always calls inference_fn."""
     calls: list[str] = []
