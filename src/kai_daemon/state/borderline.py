@@ -98,7 +98,15 @@ class BorderlinePool:
 
     def _load(self) -> None:
         if self._path.exists():
-            raw: list[dict[str, Any]] = yaml.safe_load(self._path.read_text()) or []
+            try:
+                raw: list[dict[str, Any]] = yaml.safe_load(self._path.read_text()) or []
+            except yaml.YAMLError as exc:
+                warnings.warn(
+                    f"BORDERLINE pool file {self._path} is corrupt and could not "
+                    f"be parsed — starting with an empty pool. Error: {exc}",
+                    stacklevel=2,
+                )
+                return
             for row in raw:
                 item = BorderlineItem.model_validate(row)
                 self._items[item.id] = item

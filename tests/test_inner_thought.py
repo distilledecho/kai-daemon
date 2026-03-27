@@ -106,7 +106,7 @@ def test_prompt_f_does_not_fire_when_recently_developed() -> None:
 
 
 def test_prompt_f_uses_first_eligible_fascination() -> None:
-    """When multiple fasciations qualify for PROMPT_F, the first eligible wins."""
+    """When multiple fascinations qualify for PROMPT_F, the first eligible wins."""
     f1 = _fascination(topic="first", last_developed_days_ago=20)
     f2 = _fascination(topic="second", last_developed_days_ago=20)
     result = select_prompt([f1, f2], now=_NOW, rng=_seeded_rng())
@@ -114,8 +114,8 @@ def test_prompt_f_uses_first_eligible_fascination() -> None:
     assert "second" not in result
 
 
-def test_prompt_f_skips_suspended_fasciations() -> None:
-    """PROMPT_F must not trigger for suspended fasciations."""
+def test_prompt_f_skips_suspended_fascinations() -> None:
+    """PROMPT_F must not trigger for suspended fascinations."""
     f = _fascination(
         topic="old_topic",
         status=FascinationStatus.SUSPENDED,
@@ -130,8 +130,8 @@ def test_prompt_f_skips_suspended_fasciations() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_prompt_a_in_pool_without_fasciations() -> None:
-    """With no fasciations, PROMPT_A must appear among results."""
+def test_prompt_a_in_pool_without_fascinations() -> None:
+    """With no fascinations, PROMPT_A must appear among results."""
     seen: set[str] = set()
     for seed in range(30):
         result = select_prompt([], now=_NOW, rng=_seeded_rng(seed))
@@ -139,7 +139,7 @@ def test_prompt_a_in_pool_without_fasciations() -> None:
     assert PROMPT_A in seen
 
 
-def test_prompt_e_in_pool_without_fasciations() -> None:
+def test_prompt_e_in_pool_without_fascinations() -> None:
     """PROMPT_E must appear among results over many runs."""
     seen: set[str] = set()
     for seed in range(60):
@@ -148,7 +148,7 @@ def test_prompt_e_in_pool_without_fasciations() -> None:
     assert PROMPT_E in seen
 
 
-def test_prompt_d_excluded_with_no_active_fasciations() -> None:
+def test_prompt_d_excluded_with_no_active_fascinations() -> None:
     """PROMPT_D requires an active fascination; no active → never selected."""
     suspended = _fascination(status=FascinationStatus.SUSPENDED)
     for seed in range(50):
@@ -177,7 +177,7 @@ def test_custom_weights_can_force_single_prompt() -> None:
 
 
 def test_zero_all_weights_fallback_to_prompt_a() -> None:
-    """If all weights are zero and no active fasciations, fall back to PROMPT_A."""
+    """If all weights are zero and no active fascinations, fall back to PROMPT_A."""
     weights = {"A": 0.0, "B": 0.0, "C": 0.0, "D": 0.0, "E": 0.0}
     result = select_prompt([], now=_NOW, prompt_weights=weights, rng=_seeded_rng())
     assert result == PROMPT_A

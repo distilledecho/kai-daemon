@@ -6,7 +6,7 @@ PRIVACY INVARIANT
 -----------------
 This module must never import ``daemon_relational`` or any module that
 carries user context.  The only daemon-state it may receive is the list
-of DAEMON_SELF fasciations (for PROMPT_D seed selection and PROMPT_F
+of DAEMON_SELF fascinations (for PROMPT_D seed selection and PROMPT_F
 threshold logic).  This invariant is verified by an automated test in
 ``tests/test_inner_life_privacy.py`` — do not relax it.
 
@@ -95,12 +95,12 @@ def _parse_ts(ts: str) -> datetime:
 
 
 def _prompt_f_candidate(
-    fasciations: list[Fascination],
+    fascinations: list[Fascination],
     now: datetime,
 ) -> Fascination | None:
     """Return the first active fascination eligible for PROMPT_F, or None."""
     threshold = FASCINATION_DEVELOPMENT_THRESHOLD_DAYS
-    for f in fasciations:
+    for f in fascinations:
         if f.status != FascinationStatus.ACTIVE:
             continue
         ref_str = f.last_developed if f.last_developed is not None else f.created
@@ -111,7 +111,7 @@ def _prompt_f_candidate(
 
 
 def select_prompt(
-    fasciations: list[Fascination],
+    fascinations: list[Fascination],
     *,
     now: datetime | None = None,
     prompt_weights: dict[str, float] | None = None,
@@ -127,7 +127,7 @@ def select_prompt(
     weights = {**DEFAULT_PROMPT_WEIGHTS, **(prompt_weights or {})}
 
     # PROMPT_F takes priority if any fascination qualifies.
-    f_candidate = _prompt_f_candidate(fasciations, _now)
+    f_candidate = _prompt_f_candidate(fascinations, _now)
     if f_candidate is not None:
         return PROMPT_F_TEMPLATE.format(
             topic=f_candidate.topic,
@@ -135,7 +135,7 @@ def select_prompt(
         )
 
     # Build the weighted pool of A–E prompts.
-    active = [f for f in fasciations if f.status == FascinationStatus.ACTIVE]
+    active = [f for f in fascinations if f.status == FascinationStatus.ACTIVE]
 
     pool: list[tuple[str, float]] = []  # (prompt_text, weight)
 
@@ -166,7 +166,7 @@ def select_prompt(
 
 
 def daemon_inner_thought(
-    fasciations: list[Fascination],
+    fascinations: list[Fascination],
     *,
     inference_fn: Callable[[str], str],
     now: datetime | None = None,
@@ -177,7 +177,7 @@ def daemon_inner_thought(
 
     Parameters
     ----------
-    fasciations:
+    fascinations:
         Active fascination list from DAEMON_SELF.  May be empty.
         **Must not contain user data** — this is the daemon's own interests.
     inference_fn:
@@ -196,7 +196,7 @@ def daemon_inner_thought(
         Raw text from the foundation model, unfiltered.
     """
     prompt = select_prompt(
-        fasciations,
+        fascinations,
         now=now,
         prompt_weights=prompt_weights,
         rng=rng,

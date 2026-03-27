@@ -52,7 +52,12 @@ def _source_path(module_name: str) -> str:
 
 
 def _module_imports(module_name: str) -> list[str]:
-    """Return all imported names/modules as strings (via AST, not execution)."""
+    """Return all imported names/modules as strings (via AST, not execution).
+
+    Note: only direct imports are checked. Transitive imports through helper
+    modules are not covered. If inner_thought.py delegates to a helper that
+    imports daemon_relational, this test would not catch it.
+    """
     path = _source_path(module_name)
     with open(path) as fh:
         tree = ast.parse(fh.read(), filename=path)

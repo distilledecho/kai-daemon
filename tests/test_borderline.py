@@ -287,3 +287,18 @@ def test_expire_old_skips_item_with_invalid_created_date(tmp_path: Path) -> None
     assert count == 0
     assert pool.get(item.id).status == BorderlineStatus.PENDING
     assert any("unparseable" in str(w.message) for w in caught)
+
+
+def test_load_corrupt_yaml_returns_empty_pool_with_warning(tmp_path: Path) -> None:
+    """A corrupt YAML file returns an empty pool with a warning (warn-never-raise)."""
+    import warnings
+
+    pool_path = tmp_path / "borderline_pool.yaml"
+    pool_path.write_text(": invalid: yaml: {\n")  # malformed YAML
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        pool = BorderlinePool(path=pool_path)
+
+    assert pool.list_all() == []
+    assert any("corrupt" in str(w.message) for w in caught)
