@@ -235,6 +235,20 @@ class TestWorkflowRunLogger:
         statuses = {e.status for e in entries}
         assert statuses == set(WorkflowStatus)
 
+    def test_read_all_skips_malformed_lines(
+        self, run_log: WorkflowRunLogger, tmp_path: Path
+    ):
+        """A corrupted line is skipped; valid entries before and after are returned."""
+        path = tmp_path / "workflow_runs.jsonl"
+        run_log.append(_run_entry(workflow_name="before"))
+        with path.open("a") as fh:
+            fh.write("not valid json\n")
+        run_log.append(_run_entry(workflow_name="after"))
+        entries = run_log.read_all()
+        assert len(entries) == 2
+        assert entries[0].workflow_name == "before"
+        assert entries[1].workflow_name == "after"
+
 
 # ---------------------------------------------------------------------------
 # RegisterInferenceLogger — file behaviour
@@ -337,3 +351,25 @@ class TestRegisterInferenceLogger:
             )
         )
         assert reg_log.read_all()[0].metadata["session_turn"] == 5
+
+    def test_read_all_skips_malformed_lines(
+        self, reg_log: RegisterInferenceLogger, tmp_path: Path
+    ):
+        """A corrupted line is skipped; valid entries before and after are returned."""
+        path = tmp_path / "register_inference.jsonl"
+        reg_log.append(
+            RegisterCorrectionEntry(
+                inferred_register="reflective", corrected_register="casual"
+            )
+        )
+        with path.open("a") as fh:
+            fh.write("not valid json\n")
+        reg_log.append(
+            RegisterCorrectionEntry(
+                inferred_register="exploratory", corrected_register="casual"
+            )
+        )
+        entries = reg_log.read_all()
+        assert len(entries) == 2
+        assert entries[0].inferred_register == "reflective"
+        assert entries[1].inferred_register == "exploratory"

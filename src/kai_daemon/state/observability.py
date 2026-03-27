@@ -116,7 +116,13 @@ class WorkflowRunLogger:
                 for line in fh:
                     line = line.strip()
                     if line:
-                        entries.append(WorkflowRunEntry.model_validate_json(line))
+                        try:
+                            entries.append(WorkflowRunEntry.model_validate_json(line))
+                        except Exception:
+                            logger.warning(
+                                "observability: skipping malformed line in %s",
+                                self._path,
+                            )
         except OSError:
             logger.warning(
                 "observability: failed to read %s", self._path, exc_info=True
@@ -148,9 +154,15 @@ class RegisterInferenceLogger:
                 for line in fh:
                     line = line.strip()
                     if line:
-                        entries.append(
-                            RegisterCorrectionEntry.model_validate_json(line)
-                        )
+                        try:
+                            entries.append(
+                                RegisterCorrectionEntry.model_validate_json(line)
+                            )
+                        except Exception:
+                            logger.warning(
+                                "observability: skipping malformed line in %s",
+                                self._path,
+                            )
         except OSError:
             logger.warning(
                 "observability: failed to read %s", self._path, exc_info=True
