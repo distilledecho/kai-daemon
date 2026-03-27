@@ -14,10 +14,12 @@ from typing import Any
 
 import yaml
 
-# Collection names — kept here so both store modules reference the same constants
+# Collection names — kept here so all store modules reference the same constants
 # without importing each other.
 DAEMON_SELF_COLLECTION = "daemon_self_versions"
 DAEMON_RELATIONAL_COLLECTION = "daemon_relational_versions"
+THREAD_CENTRAL_QUESTIONS_COLLECTION = "thread_central_questions"
+THREAD_HANDOFF_NOTES_COLLECTION = "thread_handoff_notes"
 
 _CONFIG_PATH = Path(__file__).parents[3] / "daemon-memory-server.yaml"
 
