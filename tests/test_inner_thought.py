@@ -13,6 +13,7 @@ from kai_daemon.state.daemon_self import (
 from kai_daemon.tools.inner_thought import (
     PROMPT_A,
     PROMPT_E,
+    _parse_ts,
     daemon_inner_thought,
     select_prompt,
 )
@@ -207,3 +208,22 @@ def test_daemon_inner_thought_with_prompt_f_eligible_fascination() -> None:
 
     daemon_inner_thought([f], inference_fn=_capture, now=_NOW)
     assert "emergence" in received[0]
+
+
+# ---------------------------------------------------------------------------
+# _parse_ts — naive datetime handling
+# ---------------------------------------------------------------------------
+
+
+def test_parse_ts_naive_datetime_gets_utc() -> None:
+    """A naive ISO timestamp (no tzinfo) is treated as UTC."""
+    result = _parse_ts("2025-06-01T12:00:00")
+    assert result.tzinfo is not None
+    assert result.tzinfo == UTC
+
+
+def test_parse_ts_aware_datetime_preserved() -> None:
+    """An aware ISO timestamp keeps its tzinfo unchanged."""
+    result = _parse_ts("2025-06-01T12:00:00+00:00")
+    assert result.tzinfo is not None
+    assert result.year == 2025

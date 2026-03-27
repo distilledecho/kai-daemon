@@ -267,3 +267,23 @@ def test_empty_pool_list_all(tmp_path: Path) -> None:
 def test_empty_pool_list_pending(tmp_path: Path) -> None:
     pool = _pool(tmp_path)
     assert pool.list_pending() == []
+
+
+def test_expire_old_skips_item_with_invalid_created_date(tmp_path: Path) -> None:
+    """An item with an unparseable 'created' field is skipped without error."""
+    import warnings
+
+    pool = _pool(tmp_path)
+    item = pool.append("some thought")
+    # Corrupt the created field directly in the backing store
+    corrupted = item.model_copy(update={"created": "not-a-date"})
+    pool._items[item.id] = corrupted
+    pool._save()
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        count = pool.expire_old(now=_NOW)
+
+    assert count == 0
+    assert pool.get(item.id).status == BorderlineStatus.PENDING
+    assert any("unparseable" in str(w.message) for w in caught)
