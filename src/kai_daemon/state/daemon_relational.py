@@ -26,7 +26,6 @@ from __future__ import annotations
 import logging
 import uuid
 import warnings
-from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
 from typing import Any
@@ -37,6 +36,7 @@ from pydantic import BaseModel, Field
 
 from ._chroma import DAEMON_RELATIONAL_COLLECTION
 from ._paths import daemon_relational_history_dir, daemon_state_dir
+from ._utils import _utcnow
 
 TOKEN_BUDGET = 700
 _CURRENT_FILENAME = "daemon_relational.yaml"
@@ -70,10 +70,6 @@ class FollowUpStyle(StrEnum):
 # ---------------------------------------------------------------------------
 # Sub-models
 # ---------------------------------------------------------------------------
-
-
-def _utcnow() -> str:
-    return datetime.now(UTC).isoformat()
 
 
 class OpenLoop(BaseModel):

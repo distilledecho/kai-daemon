@@ -23,11 +23,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from ._paths import daemon_state_dir
 from ._types import EpistemicOrigin
-
-
-def _utcnow() -> str:
-    return datetime.now(UTC).isoformat()
-
+from ._utils import _utcnow
 
 # ---------------------------------------------------------------------------
 # Enums

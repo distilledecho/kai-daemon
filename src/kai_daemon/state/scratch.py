@@ -20,6 +20,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from ._paths import daemon_state_dir
 from ._types import EpistemicOrigin
+from ._utils import _utcnow
 
 
 class ScratchType(StrEnum):
@@ -37,10 +38,6 @@ class Lifecycle(StrEnum):
 
     ACTIVE = "active"
     ARCHIVED = "archived"
-
-
-def _utcnow() -> str:
-    return datetime.now(UTC).isoformat()
 
 
 class ScratchNote(BaseModel):

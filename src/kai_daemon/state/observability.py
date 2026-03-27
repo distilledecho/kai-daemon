@@ -15,20 +15,18 @@ resilience pattern used throughout the state layer.
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from ._paths import logs_dir
+from ._utils import _utcnow
 
 logger = logging.getLogger(__name__)
 
-
-def _utcnow() -> str:
-    return datetime.now(UTC).isoformat()
+_M = TypeVar("_M", bound=BaseModel)
 
 
 # ---------------------------------------------------------------------------
@@ -92,6 +90,27 @@ def _append_jsonl(path: Path, entry: BaseModel) -> None:
         logger.warning("observability: failed to write to %s", path, exc_info=True)
 
 
+def _read_jsonl(path: Path, model: type[_M]) -> list[_M]:
+    """Read all entries from *path*. Skips malformed lines; returns [] if absent."""
+    if not path.exists():
+        return []
+    entries: list[_M] = []
+    try:
+        with path.open(encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if line:
+                    try:
+                        entries.append(model.model_validate_json(line))
+                    except Exception:
+                        logger.warning(
+                            "observability: skipping malformed line in %s", path
+                        )
+    except OSError:
+        logger.warning("observability: failed to read %s", path, exc_info=True)
+    return entries
+
+
 class WorkflowRunLogger:
     """Append-only writer for ``data/logs/workflow_runs.jsonl``.
 
@@ -108,26 +127,7 @@ class WorkflowRunLogger:
 
     def read_all(self) -> list[WorkflowRunEntry]:
         """Read all entries from the log file. Returns empty list if absent."""
-        if not self._path.exists():
-            return []
-        entries: list[WorkflowRunEntry] = []
-        try:
-            with self._path.open(encoding="utf-8") as fh:
-                for line in fh:
-                    line = line.strip()
-                    if line:
-                        try:
-                            entries.append(WorkflowRunEntry.model_validate_json(line))
-                        except Exception:
-                            logger.warning(
-                                "observability: skipping malformed line in %s",
-                                self._path,
-                            )
-        except OSError:
-            logger.warning(
-                "observability: failed to read %s", self._path, exc_info=True
-            )
-        return entries
+        return _read_jsonl(self._path, WorkflowRunEntry)
 
 
 class RegisterInferenceLogger:
@@ -146,25 +146,4 @@ class RegisterInferenceLogger:
 
     def read_all(self) -> list[RegisterCorrectionEntry]:
         """Read all entries from the log file. Returns empty list if absent."""
-        if not self._path.exists():
-            return []
-        entries: list[RegisterCorrectionEntry] = []
-        try:
-            with self._path.open(encoding="utf-8") as fh:
-                for line in fh:
-                    line = line.strip()
-                    if line:
-                        try:
-                            entries.append(
-                                RegisterCorrectionEntry.model_validate_json(line)
-                            )
-                        except Exception:
-                            logger.warning(
-                                "observability: skipping malformed line in %s",
-                                self._path,
-                            )
-        except OSError:
-            logger.warning(
-                "observability: failed to read %s", self._path, exc_info=True
-            )
-        return entries
+        return _read_jsonl(self._path, RegisterCorrectionEntry)

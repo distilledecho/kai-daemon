@@ -30,7 +30,6 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
 from typing import Any
@@ -43,12 +42,9 @@ from ._chroma import (
     THREAD_HANDOFF_NOTES_COLLECTION,
 )
 from ._paths import pickup_notes_dir, threads_dir
+from ._utils import _utcnow
 
 logger = logging.getLogger(__name__)
-
-
-def _utcnow() -> str:
-    return datetime.now(UTC).isoformat()
 
 
 # ---------------------------------------------------------------------------
