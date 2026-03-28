@@ -111,8 +111,7 @@ class DistillationMetricsStore:
 
     def load_recent(self, n: int) -> list[DistillationCycleRecord]:
         """Return the *n* most recent cycle records in ascending cycle order."""
-        sorted_records = sorted(self._records, key=lambda r: r.cycle_number)
-        return sorted_records[-n:]
+        return self.all_records()[-n:]
 
     def all_records(self) -> list[DistillationCycleRecord]:
         """Return all records in ascending cycle order."""
@@ -120,6 +119,5 @@ class DistillationMetricsStore:
 
     def next_cycle_number(self) -> int:
         """Return the next cycle number (1 if no cycles recorded yet)."""
-        if not self._records:
-            return 1
-        return max(r.cycle_number for r in self._records) + 1
+        records = self.all_records()
+        return records[-1].cycle_number + 1 if records else 1

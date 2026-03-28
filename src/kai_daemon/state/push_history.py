@@ -103,8 +103,7 @@ class PushHistoryStore:
         """Return the most recent push timestamp, or ``None`` if no push occurred."""
         if not self._records:
             return None
-        latest = max(self._records, key=lambda r: r.timestamp)
-        dt = datetime.fromisoformat(latest.timestamp)
+        dt = datetime.fromisoformat(self._records[-1].timestamp)
         if dt.tzinfo is None:
             dt = dt.replace(tzinfo=UTC)
         return dt
