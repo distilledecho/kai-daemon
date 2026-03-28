@@ -217,8 +217,6 @@ def inner_life_push_evaluation(
 
     # Record push in history when outcome is PUSH
     if outcome == PushOutcome.PUSH:
-        push_history.record_push(
-            content_summary=content[:200] if len(content) > 200 else content
-        )
+        push_history.record_push(content_summary=content[:200])
 
     return PushEvaluationResult(outcome=outcome, skipped_ceiling=False)
