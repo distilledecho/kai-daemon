@@ -13,8 +13,8 @@ suspend
 
 restart
     The workflow calls ``cooperate()`` at a safe point.  ``cooperate()``
-    raises ``WorkflowCancelled`` immediately — no checkpoint, no state
-    saved.  The engine catches ``WorkflowCancelled`` and restarts the
+    raises ``WorkflowCancelledError`` immediately — no checkpoint, no state
+    saved.  The engine catches ``WorkflowCancelledError`` and restarts the
     workflow from the beginning once higher-priority work is done.
     All ``restart`` workflows must have idempotent writes.
 
@@ -125,12 +125,18 @@ class PreemptionContext:
 
         If preempted:
 
-        * ``restart`` mode: raises ``WorkflowCancelled`` immediately.
+        * ``restart`` mode: raises ``WorkflowCancelledError`` immediately.
           ``checkpoint_fn`` and ``rollback_fn`` are never called.
         * ``suspend`` mode: calls ``checkpoint_fn()``, signals that the
           checkpoint is done (unblocking ``wait_for_checkpoint()``), then
           blocks until ``resume()`` is called, then calls ``rollback_fn()``
           and returns so the workflow can continue.
+
+        If ``checkpoint_fn`` raises, ``_checkpoint_done_event`` is never set
+        so ``wait_for_checkpoint()`` will time out and return ``False``.  The
+        engine must handle ``False`` gracefully (proceed anyway).  The
+        exception propagates out of ``cooperate()`` and the workflow thread
+        exits with that error — no resume is needed.
 
         Parameters
         ----------
@@ -148,6 +154,9 @@ class PreemptionContext:
             raise WorkflowCancelledError
 
         # --- suspend path ---
+        # If checkpoint_fn raises, the exception propagates here. The
+        # _checkpoint_done_event is left unset so wait_for_checkpoint() times
+        # out and returns False — the engine proceeds without waiting.
         checkpoint_fn()
         self._checkpoint_done_event.set()  # engine's wait_for_checkpoint unblocks
         self._resume_event.wait()  # block until engine calls resume()

@@ -323,6 +323,50 @@ class TestSuspendCooperate:
         assert not t.is_alive()
         assert done == [True]
 
+    def test_checkpoint_fn_raises_propagates(
+        self, suspend_ctx: PreemptionContext
+    ) -> None:
+        """If checkpoint_fn raises, the exception propagates out of cooperate()
+        and _checkpoint_done_event is never set."""
+        exc_seen: list[BaseException] = []
+
+        def bad_checkpoint() -> None:
+            raise RuntimeError("checkpoint failed")
+
+        def workflow() -> None:
+            try:
+                suspend_ctx.cooperate(checkpoint_fn=bad_checkpoint, rollback_fn=_noop)
+            except RuntimeError as exc:
+                exc_seen.append(exc)
+
+        suspend_ctx.preempt()
+        t = _run_in_thread(workflow)
+        t.join(timeout=_THREAD_TIMEOUT)
+        assert not t.is_alive()
+        assert len(exc_seen) == 1
+        assert str(exc_seen[0]) == "checkpoint failed"
+
+    def test_checkpoint_fn_raises_wait_for_checkpoint_times_out(
+        self, suspend_ctx: PreemptionContext
+    ) -> None:
+        """wait_for_checkpoint() returns False when checkpoint_fn raised."""
+
+        def bad_checkpoint() -> None:
+            raise RuntimeError("checkpoint failed")
+
+        def workflow() -> None:
+            try:
+                suspend_ctx.cooperate(checkpoint_fn=bad_checkpoint, rollback_fn=_noop)
+            except RuntimeError:
+                pass
+
+        suspend_ctx.preempt()
+        t = _run_in_thread(workflow)
+        t.join(timeout=_THREAD_TIMEOUT)
+
+        result = suspend_ctx.wait_for_checkpoint(timeout=0.05)
+        assert result is False
+
 
 # ---------------------------------------------------------------------------
 # Engine non-blocking: simulate priority preemption
