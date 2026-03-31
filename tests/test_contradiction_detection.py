@@ -9,11 +9,13 @@ from pathlib import Path
 
 import pytest
 
+from kai_daemon.state._types import EpistemicOrigin
 from kai_daemon.state.holding import (
     HoldingItem,
     HoldingStore,
     HoldingType,
     RegisterNeeded,
+    Urgency,
 )
 from kai_daemon.workflows.contradiction_detection import (
     CandidatePair,
@@ -703,8 +705,8 @@ class TestRegisterGateInvariant:
                 type=HoldingType.REASONED_DISAGREEMENT,
                 relevance_trigger="trigger",
                 register_needed=RegisterNeeded.REFLECTIVE,
-                urgency="medium",
+                urgency=Urgency.MEDIUM,
                 source_workflow="contradiction_detection",
-                epistemic_origin="internal",
+                epistemic_origin=EpistemicOrigin.INTERNAL,
                 contradiction_id=None,  # should raise
             )
