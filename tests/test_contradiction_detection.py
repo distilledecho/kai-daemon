@@ -9,7 +9,12 @@ from pathlib import Path
 
 import pytest
 
-from kai_daemon.state.holding import HoldingStore, HoldingType, RegisterNeeded
+from kai_daemon.state.holding import (
+    HoldingItem,
+    HoldingStore,
+    HoldingType,
+    RegisterNeeded,
+)
 from kai_daemon.workflows.contradiction_detection import (
     CandidatePair,
     ContradictionDetectionResult,
@@ -693,9 +698,6 @@ class TestRegisterGateInvariant:
         from pydantic import ValidationError
 
         with pytest.raises(ValidationError):
-            HoldingItem = __import__(  # noqa: N806
-                "kai_daemon.state.holding", fromlist=["HoldingItem"]
-            ).HoldingItem
             HoldingItem(
                 content="conflict",
                 type=HoldingType.REASONED_DISAGREEMENT,
