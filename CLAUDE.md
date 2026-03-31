@@ -48,6 +48,9 @@ uv run ruff check .
 Run `uv run tox` before signing off on any session. All four environments
 (pre-commit, type-checking, tests, docs) must be green.
 
+After fixing any tox failures, commit immediately once all four environments
+pass — do not wait for the user to ask.
+
 ## Architecture references
 
 Full spec: `/workspaces/kai-project/docs/kai-technical.md` Stages 1–4
