@@ -183,7 +183,10 @@ Two to four sentences.
 # ---------------------------------------------------------------------------
 
 # Patterns that should never appear in an externally-sent query.
-# Extend this list as the PKM schema evolves.
+# Canonical PKM collection identifiers live in daemon-memory-server.yaml
+# and src/kai_daemon/state/_chroma.py (COLLECTION_USER_PKM et al.).
+# Extend this list whenever a new user-private collection or content type
+# is added to the schema.
 _PKM_MARKERS: list[str] = [
     "user_pkm",
     "user pkm",
@@ -469,7 +472,9 @@ def commissioned_inquiry(
             prior_findings_text=prior_findings_text,
         )
         finding_response = inference_fn(finding_prompt)
-        content, _confidence, open_questions = _parse_finding_response(finding_response)
+        content, _iter_confidence, open_questions = _parse_finding_response(
+            finding_response
+        )
 
         # d. Write finding immediately (provisional)
         finding = InquiryFinding(
