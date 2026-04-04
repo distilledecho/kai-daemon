@@ -53,6 +53,18 @@ def _post(server: ActionServer, path: str) -> tuple[int, dict[str, object]]:
         return exc.code, json.loads(exc.read())
 
 
+def _request(server: ActionServer, method: str, path: str) -> int:
+    """Return the HTTP status code for an arbitrary method + path."""
+    host, port = server.address
+    url = f"http://{host}:{port}{path}"
+    req = urllib.request.Request(url, method=method)
+    try:
+        with urllib.request.urlopen(req) as resp:
+            return int(resp.status)
+    except urllib.error.HTTPError as exc:
+        return exc.code
+
+
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -117,6 +129,17 @@ def test_context_manager_with_serve_forever(tmp_path: Path) -> None:
     t.join(timeout=2.0)
 
 
+def test_default_stores_constructor(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Exercises the None-default branch for holding_store and borderline_pool.
+    monkeypatch.setenv("KAI_DATA_DIR", str(tmp_path))
+    with ActionServer(port=0) as s:
+        host, port = s.address
+        assert host == "127.0.0.1"
+        assert port > 0
+
+
 # ---------------------------------------------------------------------------
 # Unknown route
 # ---------------------------------------------------------------------------
@@ -133,6 +156,12 @@ def test_unknown_action_on_valid_prefix_returns_404(server: ActionServer) -> Non
     status, body = _post(server, "/actions/contradiction/some-id/delete")
     assert status == 404
     assert body["ok"] is False
+
+
+def test_non_post_method_returns_501(server: ActionServer) -> None:
+    # BaseHTTPRequestHandler returns 501 for methods with no do_<METHOD> handler.
+    status = _request(server, "GET", "/actions/contradiction/x/resolve")
+    assert status == 501
 
 
 # ---------------------------------------------------------------------------

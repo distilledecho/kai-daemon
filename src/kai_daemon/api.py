@@ -37,6 +37,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
@@ -183,7 +184,7 @@ class ActionServer:
         _pool = borderline_pool if borderline_pool is not None else BorderlinePool()
         handler = _make_handler(_store, _pool)
         self._server = ThreadingHTTPServer((_LOCALHOST, port), handler)
-        self._serving = False
+        self._serving_event = threading.Event()
 
     @property
     def address(self) -> tuple[str, int]:
@@ -199,11 +200,11 @@ class ActionServer:
         """Start serving requests (blocks until ``shutdown()`` is called)."""
         host, port = self.address
         logger.info("action-api: listening on %s:%d", host, port)
-        self._serving = True
+        self._serving_event.set()
         try:
             self._server.serve_forever()
         finally:
-            self._serving = False
+            self._serving_event.clear()
 
     def shutdown(self) -> None:
         """Stop serving and release the socket.
@@ -212,7 +213,7 @@ class ActionServer:
         ``BaseServer.shutdown()`` deadlocks when called without a running
         ``serve_forever()`` loop, so we only call it when actually serving.
         """
-        if self._serving:
+        if self._serving_event.is_set():
             self._server.shutdown()
         self._server.server_close()
 
