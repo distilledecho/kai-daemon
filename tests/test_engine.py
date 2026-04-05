@@ -17,7 +17,7 @@ from kai_daemon.engine import (
     _seconds_until_random_window,
 )
 from kai_daemon.state.observability import WorkflowRunLogger, WorkflowStatus
-from kai_daemon.workflows.preemption import PreemptionMode
+from kai_daemon.workflows.preemption import PreemptionMode, WorkflowCancelledError
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -338,19 +338,27 @@ def test_push_signal_gates_push_eval(tmp_path: Path) -> None:
 
 
 def test_restart_workflow_requeued_on_preemption(tmp_path: Path) -> None:
-    """A restart-mode workflow that is preempted should be re-enqueued."""
+    """When a restart-mode workflow raises WorkflowCancelledError it is re-enqueued.
+
+    Real restart-mode workflows call ``PreemptionContext.cooperate()`` at safe
+    points between inference calls; cooperate() raises WorkflowCancelledError
+    when a preempt signal is set.  We simulate that here by raising it directly
+    on the first run, then verify the engine re-enqueues and executes a second
+    run, confirming run_count >= 2.
+    """
     log_path = tmp_path / "runs.jsonl"
     engine = WorkflowEngine(run_logger=WorkflowRunLogger(log_path=log_path))
 
     run_count = [0]
-    allow_restart = threading.Event()
+    second_run_done = threading.Event()
 
     def _restartable_fn() -> None:
         run_count[0] += 1
-        allow_restart.wait(timeout=2.0)
-
-    def _high_prio_fn() -> None:
-        pass
+        if run_count[0] == 1:
+            # Simulate cooperate() firing during the first run
+            raise WorkflowCancelledError
+        else:
+            second_run_done.set()
 
     engine.register(
         _sync_spec(
@@ -360,19 +368,14 @@ def test_restart_workflow_requeued_on_preemption(tmp_path: Path) -> None:
             fn=_restartable_fn,
         )
     )
-    engine.register(_sync_spec("high_prio", priority=2, fn=_high_prio_fn))
-
     engine.start()
     engine.submit("restartable", trigger="test")
-    time.sleep(0.05)
-    # Preempt by submitting higher priority
-    engine.submit("high_prio", trigger="test")
-    allow_restart.set()
-    time.sleep(0.5)
+    assert second_run_done.wait(timeout=2.0), (
+        "restartable was not re-enqueued after cancel"
+    )
     engine.shutdown()
 
-    # restartable ran at least twice (initial + restart after preemption)
-    assert run_count[0] >= 1
+    assert run_count[0] >= 2
 
 
 # ---------------------------------------------------------------------------

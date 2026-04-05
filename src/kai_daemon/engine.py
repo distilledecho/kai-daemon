@@ -449,8 +449,12 @@ class WorkflowEngine:
             return
         logger.info("engine: cron firing %r", spec.name)
         self.submit(spec.name, trigger=spec.trigger)
-        # Reschedule for next occurrence
-        self._schedule_next_cron(spec)
+        # Reschedule for next occurrence — random-window specs need their own
+        # re-scheduler because _seconds_until_next_run returns None for them.
+        if spec.trigger == TriggerType.CRON_RANDOM_WINDOW:
+            self._schedule_random_window(spec)
+        else:
+            self._schedule_next_cron(spec)
 
     def _cron_loop(self) -> None:
         """Background thread that runs the sched scheduler."""
@@ -481,8 +485,9 @@ class WorkflowEngine:
         """Execute a single workflow, handling preemption and observability."""
         ctx = PreemptionContext(spec.preemption_mode)
 
-        with self._active_lock:
+        with self._lifecycle_lock:
             self._lifecycle[spec.name] = WorkflowLifecycle.RUNNING
+        with self._active_lock:
             self._active_ctx = ctx
             self._active_spec_name = spec.name
 
