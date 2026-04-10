@@ -36,6 +36,8 @@ import random
 from collections.abc import Callable
 from enum import StrEnum
 
+from ..sdk import sdk_tool
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -96,6 +98,7 @@ def _parse_verdict(raw: str) -> FilterVerdict:
 # ---------------------------------------------------------------------------
 
 
+@sdk_tool("daemon_inner_thought_filter")
 def daemon_inner_thought_filter(
     raw_output: str,
     *,

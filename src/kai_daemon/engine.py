@@ -56,6 +56,12 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
+from .sdk import (
+    WorkflowContext,
+    _empty_frozenset_str,
+    reset_workflow_context,
+    set_workflow_context,
+)
 from .state.observability import WorkflowRunEntry, WorkflowRunLogger, WorkflowStatus
 from .workflows.preemption import (
     PreemptionContext,
@@ -150,6 +156,7 @@ class WorkflowSpec:
     cron_window_start: int | None = None
     cron_window_end: int | None = None
     push_signal_required: bool = False
+    allowed_tools: frozenset[str] = field(default_factory=_empty_frozenset_str)
 
 
 # ---------------------------------------------------------------------------
@@ -500,6 +507,15 @@ class WorkflowEngine:
             spec.priority,
         )
 
+        # Set the SDK workflow context so tools can check permissions and log
+        # calls with the correct workflow_id.
+        _sdk_token = set_workflow_context(
+            WorkflowContext(
+                workflow_id=spec.name,
+                allowed_tools=spec.allowed_tools,
+            )
+        )
+
         try:
             spec.fn()
             status = WorkflowStatus.SUCCESS
@@ -515,6 +531,8 @@ class WorkflowEngine:
             status = WorkflowStatus.FAILURE
         finally:
             completed_at = _utcnow()
+
+            reset_workflow_context(_sdk_token)
 
             with self._active_lock:
                 self._active_ctx = None

@@ -33,6 +33,7 @@ import random
 from collections.abc import Callable
 from datetime import UTC, datetime
 
+from ..sdk import sdk_tool
 from ..state.daemon_self import Fascination, FascinationStatus
 
 # ---------------------------------------------------------------------------
@@ -165,6 +166,7 @@ def select_prompt(
 # ---------------------------------------------------------------------------
 
 
+@sdk_tool("daemon_inner_thought")
 def daemon_inner_thought(
     fascinations: list[Fascination],
     *,

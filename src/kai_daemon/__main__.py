@@ -7,6 +7,10 @@ import signal
 import threading
 from argparse import ArgumentParser
 from collections.abc import Callable, Sequence
+from pathlib import Path
+from typing import Any, cast
+
+import yaml
 
 from . import __version__
 from .api import DEFAULT_PORT, ActionServer
@@ -53,8 +57,50 @@ def _noop(name: str) -> None:
     logger.debug("%s: not yet implemented — skipping", name)
 
 
-def _build_engine(run_logger: WorkflowRunLogger) -> WorkflowEngine:
+def _load_allowed_tools(workflows_yaml: Path) -> dict[str, frozenset[str]]:
+    """Parse ``workflows.yaml`` and return a workflow_name → allowed_tools map.
+
+    Returns an empty dict (and warns) if the file is missing or malformed.
+    """
+    if not workflows_yaml.exists():
+        logger.warning(
+            "workflows.yaml not found at %s — all workflows have empty tool lists",
+            workflows_yaml,
+        )
+        return {}
+    try:
+        loaded: Any = yaml.safe_load(workflows_yaml.read_text()) or {}
+        if not isinstance(loaded, dict):
+            logger.warning("workflows.yaml root is not a mapping — ignoring")
+            return {}
+        raw: dict[str, Any] = cast(dict[str, Any], loaded)
+        result: dict[str, frozenset[str]] = {}
+        for wf_name, wf_config in raw.items():
+            if not isinstance(wf_config, dict):
+                continue
+            wf_dict: dict[str, Any] = cast(dict[str, Any], wf_config)
+            tools_raw: Any = wf_dict.get("permitted_tools", [])
+            if isinstance(tools_raw, list):
+                tools_list: list[Any] = cast(list[Any], tools_raw)
+                result[str(wf_name)] = frozenset(str(t) for t in tools_list)
+        return result
+    except Exception:
+        logger.warning("Failed to parse workflows.yaml", exc_info=True)
+        return {}
+
+
+def _build_engine(
+    run_logger: WorkflowRunLogger,
+    *,
+    allowed_tools: dict[str, frozenset[str]] | None = None,
+) -> WorkflowEngine:
     """Construct and register all known workflows with the engine."""
+
+    _tools = allowed_tools or {}
+
+    def _t(name: str) -> frozenset[str]:
+        """Return the allowed tools frozenset for *name*, defaulting to empty."""
+        return _tools.get(name, frozenset())
 
     engine = WorkflowEngine(run_logger=run_logger)
 
@@ -70,6 +116,7 @@ def _build_engine(run_logger: WorkflowRunLogger) -> WorkflowEngine:
             preemption_mode=PreemptionMode.SUSPEND,
             fn=_make_seeding_fn(),
             condition="no_daemon_self",
+            allowed_tools=_t("daemon_seeding"),
         )
     )
 
@@ -82,6 +129,7 @@ def _build_engine(run_logger: WorkflowRunLogger) -> WorkflowEngine:
             fn=run_onboarding,
             condition="user_yaml_empty",
             requires="daemon_seeding",
+            allowed_tools=_t("onboarding"),
         )
     )
 
@@ -98,6 +146,7 @@ def _build_engine(run_logger: WorkflowRunLogger) -> WorkflowEngine:
             fn=lambda: _noop("daemon_inner_thought_generation"),
             cron_window_start=2,
             cron_window_end=4,
+            allowed_tools=_t("daemon_inner_thought_generation"),
         )
     )
 
@@ -113,6 +162,7 @@ def _build_engine(run_logger: WorkflowRunLogger) -> WorkflowEngine:
             preemption_mode=PreemptionMode.RESTART,
             fn=lambda: _noop("daemon_integration"),
             trigger_after="daemon_inner_thought_generation",
+            allowed_tools=_t("daemon_integration"),
         )
     )
 
@@ -124,6 +174,7 @@ def _build_engine(run_logger: WorkflowRunLogger) -> WorkflowEngine:
             preemption_mode=PreemptionMode.RESTART,
             fn=lambda: _noop("inner_life_thread_pollination"),
             trigger_after="daemon_integration",
+            allowed_tools=_t("inner_life_thread_pollination"),
         )
     )
 
@@ -136,6 +187,7 @@ def _build_engine(run_logger: WorkflowRunLogger) -> WorkflowEngine:
             fn=lambda: _noop("inner_life_push_evaluation"),
             trigger_after="inner_life_thread_pollination",
             push_signal_required=True,
+            allowed_tools=_t("inner_life_push_evaluation"),
         )
     )
 
@@ -151,6 +203,7 @@ def _build_engine(run_logger: WorkflowRunLogger) -> WorkflowEngine:
             preemption_mode=PreemptionMode.SUSPEND,
             fn=lambda: _noop("contradiction_detection"),
             cron_hour=0,
+            allowed_tools=_t("contradiction_detection"),
         )
     )
 
@@ -172,6 +225,7 @@ def _build_engine(run_logger: WorkflowRunLogger) -> WorkflowEngine:
                 preemption_mode=PreemptionMode.SUSPEND,
                 fn=lambda n=_wf_name: _noop(n),
                 cron_hour=_wf_hour,
+                allowed_tools=_t(_wf_name),
             )
         )
 
@@ -187,6 +241,7 @@ def _build_engine(run_logger: WorkflowRunLogger) -> WorkflowEngine:
             preemption_mode=PreemptionMode.SUSPEND,
             fn=lambda: _noop("associative_retrieval"),
             cron_hour=1,
+            allowed_tools=_t("associative_retrieval"),
         )
     )
 
@@ -271,10 +326,13 @@ def main(args: Sequence[str] | None = None) -> None:
     host, port = action_server.address
     logger.info("action-api: ready at http://%s:%d", host, port)
 
-    # 3. Build and start the workflow engine
+    # 3. Build and start the workflow engine.
+    #    Load workflows.yaml for the SDK permission matrix, then
     #    start() evaluates startup_conditions (daemon_seeding → onboarding)
     #    and schedules background cron workflows.
-    engine = _build_engine(run_logger)
+    _workflows_yaml = Path(__file__).parents[2] / "workflows.yaml"
+    _allowed_tools = _load_allowed_tools(_workflows_yaml)
+    engine = _build_engine(run_logger, allowed_tools=_allowed_tools)
     engine.start()
 
     # 4. Block until SIGINT / SIGTERM
