@@ -35,11 +35,6 @@ from .state.observability import InferenceCallEntry, InferenceCallLogger
 
 logger = logging.getLogger(__name__)
 
-# The five mlx-kv-server inference primitives.
-_PRIMITIVES: frozenset[str] = frozenset(
-    {"prefill", "generate", "checkpoint", "rollback", "evict"}
-)
-
 
 class InstrumentedMlxKvClient:
     """mlx-kv-client wrapper that logs every primitive call.
