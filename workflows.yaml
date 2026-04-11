@@ -1,0 +1,145 @@
+# workflows.yaml — Kai SDK permission matrix
+#
+# Declares the permitted SDK tools for each workflow.  The engine reads this
+# file at startup and passes the allowed_tools frozenset to each WorkflowSpec.
+# Tools not listed here are blocked by the SDK at call time (ToolPermissionError).
+#
+# Empty permitted_tools list = no SDK tools permitted for that workflow.
+# Tool names must match the name argument passed to @sdk_tool in the tool module.
+
+# ---------------------------------------------------------------------------
+# Priority 0 — Initialization
+# ---------------------------------------------------------------------------
+
+daemon_seeding:
+  permitted_tools: []
+
+onboarding:
+  permitted_tools: []
+
+# ---------------------------------------------------------------------------
+# Priority 1 — Live conversation
+# ---------------------------------------------------------------------------
+
+personal_assistant:
+  permitted_tools:
+    - web.search
+    - web.fetch
+    - weather
+    - calendar.read
+    - calendar.kai_write
+    - memory.search
+    - memory.store
+    - ingest
+    - calculate
+    - draft
+
+# ---------------------------------------------------------------------------
+# Priority 2 — Responsive
+# ---------------------------------------------------------------------------
+
+ingest_document:
+  permitted_tools:
+    - memory.store
+
+commissioned_inquiry:
+  permitted_tools:
+    - web.search
+    - web.fetch
+    - memory.search
+
+push_message:
+  permitted_tools: []
+
+# ---------------------------------------------------------------------------
+# Priority 3 — Gap-triggered
+# ---------------------------------------------------------------------------
+
+temporal_bridging:
+  permitted_tools:
+    - memory.search
+
+daemon_distillation:
+  permitted_tools:
+    - memory.search
+    - memory.store
+
+thread_pickup:
+  permitted_tools:
+    - memory.search
+
+# ---------------------------------------------------------------------------
+# Priority 4 — Post-conversation
+# ---------------------------------------------------------------------------
+
+episodic_flush:
+  permitted_tools:
+    - memory.store
+
+relational_update:
+  permitted_tools: []
+
+daily_digest:
+  permitted_tools: []
+
+# ---------------------------------------------------------------------------
+# Priority 5 — Nightly knowledge
+# ---------------------------------------------------------------------------
+
+contradiction_detection:
+  permitted_tools:
+    - memory.search
+
+unexamined_document_review:
+  permitted_tools:
+    - memory.search
+
+# ---------------------------------------------------------------------------
+# Priority 6 — Nightly maintenance
+# ---------------------------------------------------------------------------
+
+open_loop_review:
+  permitted_tools: []
+
+embedding_backfill:
+  permitted_tools:
+    - memory.store
+
+transcript_pruning:
+  permitted_tools: []
+
+holding_review:
+  permitted_tools: []
+
+# ---------------------------------------------------------------------------
+# Priority 7 — Late night
+# ---------------------------------------------------------------------------
+
+dormant_thread_writer:
+  permitted_tools: []
+
+associative_retrieval:
+  permitted_tools:
+    - memory.search
+
+# ---------------------------------------------------------------------------
+# Priority 8 — Background chained (inner life pipeline)
+# ---------------------------------------------------------------------------
+
+daemon_integration:
+  permitted_tools:
+    - daemon_inner_thought_filter
+
+inner_life_thread_pollination:
+  permitted_tools: []
+
+inner_life_push_evaluation:
+  permitted_tools: []
+
+# ---------------------------------------------------------------------------
+# Priority 9 — Deep background
+# ---------------------------------------------------------------------------
+
+daemon_inner_thought_generation:
+  permitted_tools:
+    - daemon_inner_thought

@@ -1,4 +1,5 @@
-"""Observability hooks — workflow run log and register inference log (§13).
+"""Observability hooks — workflow run log, register inference log, inference call
+log, and tool call log (§13, Stage 3.5).
 
 These are writer functions that workflows call — not the workflow engine itself.
 
@@ -8,7 +9,13 @@ These are writer functions that workflows call — not the workflow engine itsel
 ``RegisterInferenceLogger.append()`` writes one JSON line to
 ``data/logs/register_inference.jsonl`` for every register correction.
 
-Both logs are append-only. Failures warn but never raise — the same
+``InferenceCallLogger.append()`` writes one JSON line to
+``data/logs/inference_calls.jsonl`` for every mlx-kv-server primitive call.
+
+``ToolCallLogger.append()`` writes one JSON line to
+``data/logs/tool_calls.jsonl`` for every Kai SDK tool call.
+
+All logs are append-only. Failures warn but never raise — the same
 resilience pattern used throughout the state layer.
 """
 
@@ -57,6 +64,47 @@ class WorkflowRunEntry(BaseModel):
     status: WorkflowStatus
     memory_server_available: bool
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class InferenceCallEntry(BaseModel):
+    """Log entry for a single mlx-kv-server primitive call (Stage 3.5).
+
+    Written by ``InferenceCallLogger`` to ``data/logs/inference_calls.jsonl``
+    on every call to a primitive (prefill, generate, checkpoint, rollback,
+    evict) via the instrumented mlx-kv-client wrapper.
+
+    Fields mirror the ADR-001 specification exactly.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    timestamp: str
+    primitive: str
+    tokens_before: int
+    tokens_after: int
+    duration_ms: int
+    success: bool
+    workflow_id: str | None = None
+
+
+class ToolCallEntry(BaseModel):
+    """Log entry for a single Kai SDK tool call (Stage 3.5).
+
+    Written by ``ToolCallLogger`` to ``data/logs/tool_calls.jsonl`` on every
+    tool call that executes inside a workflow context.
+
+    ``outcome`` is one of: ``"success"``, ``"error"``, ``"permission_denied"``.
+    ``error`` carries a short error message when ``outcome != "success"``.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    timestamp: str = Field(default_factory=_utcnow)
+    workflow_id: str | None
+    tool: str
+    inputs: dict[str, Any] = Field(default_factory=dict)
+    outcome: str
+    error: str | None = None
 
 
 class RegisterCorrectionEntry(BaseModel):
@@ -109,6 +157,44 @@ def _read_jsonl(path: Path, model: type[_M]) -> list[_M]:
     except OSError:
         logger.warning("observability: failed to read %s", path, exc_info=True)
     return entries
+
+
+class InferenceCallLogger:
+    """Append-only writer for ``data/logs/inference_calls.jsonl``.
+
+    Args:
+        log_path: Override the default log file path (for tests).
+    """
+
+    def __init__(self, log_path: Path | None = None) -> None:
+        self._path = log_path or (logs_dir() / "inference_calls.jsonl")
+
+    def append(self, entry: InferenceCallEntry) -> None:
+        """Append *entry* to the inference call log."""
+        _append_jsonl(self._path, entry)
+
+    def read_all(self) -> list[InferenceCallEntry]:
+        """Read all entries from the log file. Returns empty list if absent."""
+        return _read_jsonl(self._path, InferenceCallEntry)
+
+
+class ToolCallLogger:
+    """Append-only writer for ``data/logs/tool_calls.jsonl``.
+
+    Args:
+        log_path: Override the default log file path (for tests).
+    """
+
+    def __init__(self, log_path: Path | None = None) -> None:
+        self._path = log_path or (logs_dir() / "tool_calls.jsonl")
+
+    def append(self, entry: ToolCallEntry) -> None:
+        """Append *entry* to the tool call log."""
+        _append_jsonl(self._path, entry)
+
+    def read_all(self) -> list[ToolCallEntry]:
+        """Read all entries from the log file. Returns empty list if absent."""
+        return _read_jsonl(self._path, ToolCallEntry)
 
 
 class WorkflowRunLogger:

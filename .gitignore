@@ -69,3 +69,7 @@ lockfiles/
 
 # ruff cache
 .ruff_cache/
+
+# other
+data/daemon_state/daemon_self.yaml
+data/logs

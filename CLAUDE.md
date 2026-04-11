@@ -55,6 +55,7 @@ pass — do not wait for the user to ask.
 
 Full spec: `/workspaces/kai-project/docs/kai-technical.md` Stages 1–4
 Full architecture: `/workspaces/kai-project/docs/kai-architecture.md`
+Tool catalogue, permission matrix, Kai SDK: `/workspaces/kai-project/docs/kai-tools.md`
 
 Key sections by stage:
 - Stage 1: §4 (data layer), §4a DAEMON_SELF, §4b DAEMON_RELATIONAL,
@@ -62,6 +63,7 @@ Key sections by stage:
 - Stage 2: §7 inner life pipeline, §5 privacy invariants
 - Stage 3: §6 workflow engine, §6b trigger vocabulary, §6d priority model,
   §6e preemption model
+- Stage 3.5: `adr-001-mlx-kv-server-status-endpoint.md` — /status and inference logging
 - Stage 4: §8 session architecture, §8a thread stack, §8b retrieval,
   §8d discharge, §8e register inference, §8f streaming push, §9 thread lifecycle
 
@@ -74,6 +76,7 @@ one is stable.
 Stage 1 — State Architecture        (no inference, no workflows — pure data)
 Stage 2 — Inner Life Pipeline       (background thought generation)
 Stage 3 — Workflow Decomposition    (all 29 workflows, commissioned inquiry)
+Stage 3.5 — Inference observability (mlx-kv-server /status, inference logging)
 Stage 4 — Conversation Integration  (personal_assistant wired to everything)
 ```
 
@@ -122,6 +125,11 @@ prompt runs.
 call `checkpoint` before pausing and `rollback` on resume. `restart` workflows
 are idempotent — their writes can be repeated safely.
 
+**Tool permissions are enforced structurally by the Kai SDK.** Every workflow
+declares its permitted tools in `workflows.yaml`. The SDK raises
+`ToolPermissionError` at call time if a tool is invoked outside its permitted
+context. This cannot be bypassed by prompting. See `kai-tools.md`.
+
 ## Local action API (for kai-devtools)
 
 `kai-devtools` is read-only with respect to daemon state files, but surfaces
@@ -158,9 +166,11 @@ data/
   logs/
     workflow_runs.jsonl        # observability log — one entry per workflow run
     register_inference.jsonl   # register inference history
+    inference_calls.jsonl      # mlx-kv-server primitive call log (Stage 3.5)
+    tool_calls.jsonl           # Kai SDK tool call log
 
 src/kai_daemon/
-  tools/                       # all tool implementations
+  tools/                       # Kai SDK tool implementations
   workflows/                   # all 29 workflow implementations
 
 prompts/                       # prompt files, one per workflow/tool
@@ -171,21 +181,21 @@ daemon-memory-server.yaml      # connection, embedding model, retrieval config, 
 
 ## Workflow registry summary
 
-29 workflows across priorities 0–9. See `../kai-project/docs/kai-technical.md`
+29 workflows across priorities 0–9. See `/workspaces/kai-project/docs/kai-technical.md`
 Full `workflows.yaml` section for the complete registry.
 
-| Priority | Category            | Key workflows                                      |
-|----------|---------------------|----------------------------------------------------|
+| Priority | Category            | Key workflows                                        |
+|----------|---------------------|------------------------------------------------------|
 | 0        | Initialization      | daemon_seeding, onboarding (seeding gates onboarding)|
-| 1        | Live conversation   | personal_assistant                                 |
-| 2        | Responsive          | ingest_document, commissioned_inquiry, push_message|
-| 3        | Gap-triggered       | temporal_bridging, daemon_distillation, thread_pickup |
-| 4        | Post-conversation   | episodic_flush, relational_update, daily_digest    |
-| 5        | Nightly knowledge   | contradiction_detection, unexamined_document_review|
-| 6        | Nightly maintenance | embedding_backfill, transcript_pruning             |
-| 7        | Late night          | dormant_thread_writer, associative_retrieval       |
-| 8        | Background chained  | daemon_integration, inner_life_thread_pollination  |
-| 9        | Deep background     | daemon_inner_thought_generation                    |
+| 1        | Live conversation   | personal_assistant                                   |
+| 2        | Responsive          | ingest_document, commissioned_inquiry, push_message  |
+| 3        | Gap-triggered       | temporal_bridging, daemon_distillation, thread_pickup|
+| 4        | Post-conversation   | episodic_flush, relational_update, daily_digest      |
+| 5        | Nightly knowledge   | contradiction_detection, unexamined_document_review  |
+| 6        | Nightly maintenance | embedding_backfill, transcript_pruning               |
+| 7        | Late night          | dormant_thread_writer, associative_retrieval         |
+| 8        | Background chained  | daemon_integration, inner_life_thread_pollination    |
+| 9        | Deep background     | daemon_inner_thought_generation                      |
 
 ## Stage acceptance criteria
 
@@ -214,6 +224,12 @@ Full `workflows.yaml` section for the complete registry.
 - [ ] Localhost action API implemented; contradiction and BORDERLINE actions work end-to-end
 - [ ] kai-devtools panel built with all observability surfaces
 
+### Stage 3.5
+- [ ] Every primitive call logged to `inference_calls.jsonl` with all fields
+- [ ] Kai SDK initialised with permission context from `workflows.yaml` at engine startup
+- [ ] `ToolPermissionError` raised and logged when a tool is called outside permitted context
+- [ ] All tool calls logged to `tool_calls.jsonl` with workflow_id, tool, inputs, outcome
+
 ### Stage 4
 - [ ] Thread stack: `state` derived from rank each turn, never stored independently; stack capped at 2; floating threads separate list, no eviction
 - [ ] All five salience constants and `drop_threshold` configurable in `user.yaml` under `thread_stack:`
@@ -229,7 +245,7 @@ At the end of every session, update the project board:
 
 ```bash
 gh issue close <number> --repo distilledecho/kai-daemon
-bash ../kai-project/setup/project-move.sh <issue-url> "Done"
+bash /workspaces/kai-project/setup/project-move.sh <issue-url> "Done"
 ```
 
 ## Review
