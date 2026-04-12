@@ -89,8 +89,8 @@ class SalienceConfig:
     drop_threshold: float = 0.30
     floating_depth_decay: float = 0.99
     floating_recency_floor: float = 0.50
-    floating_drop_threshold: float = 0.45
-    floating_max_turns_unresolved: int = 20
+    floating_drop_threshold: float = 0.05
+    floating_max_turns_unresolved: int = 200
 
     @classmethod
     def from_dict(cls, data: dict[str, object]) -> SalienceConfig:

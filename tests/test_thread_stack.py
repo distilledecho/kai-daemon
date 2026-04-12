@@ -401,17 +401,17 @@ def test_floating_max_turns_unresolved_removes_entry(config: SalienceConfig):
     # Add a floating thread at turn 1
     floating = add_floating_thread(floating, "floating-1", current_turn=1)
 
-    # Update at turn 25 (exceeds floating_max_turns_unresolved of 20)
+    # Update at turn 202 (exceeds floating_max_turns_unresolved of 200)
     _, updated_floating = update_stack(
         stack=[],
         floating_threads=floating,
-        current_turn=25,
+        current_turn=202,
         referenced_thread_ids=set(),
         stance_movement_ids=set(),
         config=config,
     )
 
-    # Floating thread should be removed (25 - 1 = 24 > 20)
+    # Floating thread should be removed (202 - 1 = 201 > 200)
     assert len(updated_floating) == 0
 
 
