@@ -413,3 +413,37 @@ def test_floating_max_turns_unresolved_removes_entry(config: SalienceConfig):
 
     # Floating thread should be removed (25 - 1 = 24 > 20)
     assert len(updated_floating) == 0
+
+
+def test_entry_salience_updated_after_update_stack(config: SalienceConfig):
+    """entry.salience is written back after update_stack so state assignment is correct.
+
+    Before the fix, entry.salience was never updated — assign_states sorted by
+    stale 0.5 values and state assignment was meaningless.
+    """
+    stack: list[ThreadStackEntry] = []
+
+    stack = add_thread_to_stack(stack, "thread-1", current_turn=1)
+    stack = add_thread_to_stack(stack, "thread-2", current_turn=2)
+
+    stack, _ = update_stack(
+        stack=stack,
+        floating_threads=[],
+        current_turn=3,
+        referenced_thread_ids={"thread-1"},
+        stance_movement_ids=set(),
+        config=config,
+    )
+
+    entry1 = next(e for e in stack if e.thread_id == "thread-1")
+    entry2 = next(e for e in stack if e.thread_id == "thread-2")
+
+    # Both entries must have left the stale initial 0.5
+    assert entry1.salience != pytest.approx(0.5)  # type: ignore[reportUnknownMemberType]
+    assert entry2.salience != pytest.approx(0.5)  # type: ignore[reportUnknownMemberType]
+
+    # State assignment must reflect current salience ordering, not stale values
+    higher = entry1 if entry1.salience > entry2.salience else entry2
+    lower = entry2 if entry1.salience > entry2.salience else entry1
+    assert higher.state == ThreadStackState.foreground
+    assert lower.state == ThreadStackState.peripheral

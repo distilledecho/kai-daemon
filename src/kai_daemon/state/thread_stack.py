@@ -13,6 +13,7 @@ Floating threads: No eviction. No cap. Persist until explicitly resolved or dism
 
 from __future__ import annotations
 
+import dataclasses
 from dataclasses import dataclass
 from enum import StrEnum
 
@@ -94,7 +95,8 @@ class SalienceConfig:
     @classmethod
     def from_dict(cls, data: dict[str, object]) -> SalienceConfig:
         """Create config from user.yaml dictionary."""
-        filtered = {k: v for k, v in data.items() if hasattr(cls, k)}
+        field_names = {f.name for f in dataclasses.fields(cls)}
+        filtered = {k: v for k, v in data.items() if k in field_names}
         return cls(**filtered)  # type: ignore[arg-type]
 
 
@@ -139,11 +141,13 @@ def update_salience(
 
     salience = (config.recency_weight * recency) + (config.depth_weight * new_depth)
 
+    new_salience = min(1.0, salience)
     entry.engagement_depth = new_depth
+    entry.salience = new_salience
     if was_referenced:
         entry.last_touched_turn = current_turn
 
-    return min(1.0, salience)
+    return new_salience
 
 
 def assign_states(stack: list[ThreadStackEntry]) -> None:
@@ -238,6 +242,7 @@ def update_stack(
         )
 
         entry.engagement_depth = new_depth
+        entry.salience = new_salience
 
         # Remove if unresolved too long and salience below threshold
         if turns_unresolved <= config.floating_max_turns_unresolved:
