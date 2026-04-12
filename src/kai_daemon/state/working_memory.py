@@ -13,6 +13,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from .thread_stack import ThreadStackEntry
+
 
 @dataclass
 class TurnNote:
@@ -79,3 +81,16 @@ class WorkingMemory:
 
     commissioned_inquiries: list[str] = field(default_factory=lambda: list[str]())
     """Inquiry IDs commissioned in this session."""
+
+    thread_stack: list[ThreadStackEntry] = field(
+        default_factory=lambda: list[ThreadStackEntry]()
+    )
+    """Active thread stack (foreground + peripheral, max 2 entries)."""
+
+    floating_threads: list[ThreadStackEntry] = field(
+        default_factory=lambda: list[ThreadStackEntry]()
+    )
+    """Floating threads (no cap, no eviction)."""
+
+    turn_count: int = 0
+    """Current turn number for the session."""
