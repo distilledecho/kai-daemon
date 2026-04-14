@@ -33,6 +33,9 @@ register_thresholds:
     daemon_self_versions: 3
     daemon_relational_versions: 30
 
+holding:
+  discharge_threshold: 0.72         # minimum relevance_trigger similarity to pass gate 1
+
 inner_life:
   bypass_valve_rate: 0.12           # fraction of filter outputs that pass unfiltered
   prompt_rotation: [A, B, C, D, E]  # A–E rotation; PROMPT_F fires automatically at 14d
