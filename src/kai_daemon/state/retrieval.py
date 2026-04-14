@@ -123,7 +123,7 @@ class SemanticResult:
     text: str
     score: float
     space: str
-    metadata: dict[str, Any] = field(default_factory=lambda: dict[str, Any]())
+    metadata: dict[str, Any] = field(default_factory=dict)  # type: ignore[reportUnknownVariableType]
 
 
 @dataclass
@@ -145,12 +145,8 @@ class RetrievalContext:
         False
     """
 
-    semantic: list[SemanticResult] = field(
-        default_factory=lambda: list[SemanticResult]()
-    )
-    pending_artifacts: list[SemanticResult] = field(
-        default_factory=lambda: list[SemanticResult]()
-    )
+    semantic: list[SemanticResult] = field(default_factory=list)  # type: ignore[reportUnknownVariableType]
+    pending_artifacts: list[SemanticResult] = field(default_factory=list)  # type: ignore[reportUnknownVariableType]
 
     @property
     def has_pending(self) -> bool:
@@ -330,6 +326,12 @@ async def conversational_retrieval(
     if peripheral is not None and thread_store is not None:
         try:
             thread = thread_store.load(peripheral.thread_id)
+            # Two-stage weighting: space_weights here are lower than the
+            # primary query (user_pkm 0.6 vs 1.0, daemon 0.2 vs 0.3) because
+            # the peripheral thread's central_question is a different angle —
+            # less directly grounded in the user's PKM and daemon knowledge.
+            # peripheral_weight=0.4 then further scales the entire secondary
+            # contribution at merge time.
             secondary_query = SemanticQuery(
                 query_text=thread.central_question,
                 spaces=["user_pkm", "daemon", "shared"],

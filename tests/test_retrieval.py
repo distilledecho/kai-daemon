@@ -192,6 +192,7 @@ def test_pending_artifact_surfaced() -> None:
     assert len(result.pending_artifacts) == 1
     assert result.pending_artifacts[0].document_id == "art-pending"
     assert result.has_pending
+    assert not result.is_empty
 
 
 # ---------------------------------------------------------------------------
