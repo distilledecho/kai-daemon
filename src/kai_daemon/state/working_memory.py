@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from .register_inference import SessionRelationalShadow
 from .thread_stack import ThreadStackEntry
 
 
@@ -91,6 +92,15 @@ class WorkingMemory:
         default_factory=lambda: list[ThreadStackEntry]()
     )
     """Floating threads (no cap, no eviction)."""
+
+    relational_shadow: SessionRelationalShadow = field(
+        default_factory=SessionRelationalShadow
+    )
+    """Within-session relational shadow (§8c).
+
+    Accumulates register corrections during this session.  Updated by the
+    correction pathway whenever the user signals a misread.
+    """
 
     turn_count: int = 0
     """Current turn number for the session."""
