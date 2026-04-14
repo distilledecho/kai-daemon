@@ -20,8 +20,8 @@ thread_stack:
   drop_threshold: 0.30
   floating_depth_decay: 0.99
   floating_recency_floor: 0.50
-  floating_drop_threshold: 0.45
-  floating_max_turns_unresolved: 20
+  floating_drop_threshold: 0.05
+  floating_max_turns_unresolved: 200
 
 register_thresholds:
   developing:
