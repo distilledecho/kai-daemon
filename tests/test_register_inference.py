@@ -17,6 +17,7 @@ from kai_daemon.state.observability import (
     RegisterInferenceLogger,
 )
 from kai_daemon.state.register_inference import (
+    _HISTORY_WEIGHT,
     VALID_REGISTERS,
     RegisterInference,
     SessionRelationalShadow,
@@ -271,8 +272,8 @@ class TestApplyCorrectionHistoryPrior:
         )
         base = {"casual": 1.0, "reflective": 0.5, "exploratory": 0.0, "urgent": 0.0}
         result = _apply_correction_history_prior(base, [entry])
-        assert abs(result["casual"] - (1.0 - 0.15)) < 1e-9
-        assert abs(result["reflective"] - (0.5 + 0.15)) < 1e-9
+        assert abs(result["casual"] - (1.0 - _HISTORY_WEIGHT)) < 1e-9
+        assert abs(result["reflective"] - (0.5 + _HISTORY_WEIGHT)) < 1e-9
 
     def test_does_not_mutate_base_scores(self) -> None:
         entry = RegisterCorrectionEntry(
@@ -295,9 +296,9 @@ class TestApplyCorrectionHistoryPrior:
         ]
         base = {"casual": 1.0, "reflective": 0.0, "exploratory": 0.0, "urgent": 0.0}
         result = _apply_correction_history_prior(base, entries)
-        # Only 20 applied: casual -= 20*0.15, reflective += 20*0.15
-        assert abs(result["casual"] - (1.0 - 20 * 0.15)) < 1e-9
-        assert abs(result["reflective"] - (0.0 + 20 * 0.15)) < 1e-9
+        # Only 20 applied: casual -= 20*W, reflective += 20*W  (W = _HISTORY_WEIGHT)
+        assert abs(result["casual"] - (1.0 - 20 * _HISTORY_WEIGHT)) < 1e-9
+        assert abs(result["reflective"] - (0.0 + 20 * _HISTORY_WEIGHT)) < 1e-9
 
 
 # ---------------------------------------------------------------------------
@@ -543,6 +544,75 @@ class TestApplyCorrectionEmitsNewMessage:
         msg1 = apply_correction("casual", "reflective", shadow, logger)
         msg2 = apply_correction("casual", "urgent", shadow, logger)
         assert msg1 != msg2
+
+    def test_same_register_returns_default_acknowledgment(self, tmp_path: Path) -> None:
+        """Same inferred and corrected register falls through to the default ack."""
+        logger = _logger(tmp_path)
+        shadow = _shadow()
+        msg = apply_correction("reflective", "reflective", shadow, logger)
+        assert isinstance(msg, str)
+        assert len(msg) > 0
+
+
+# ---------------------------------------------------------------------------
+# apply_correction — invalid register guard
+# ---------------------------------------------------------------------------
+
+
+class TestApplyCorrectionValidation:
+    def test_invalid_inferred_register_raises(self, tmp_path: Path) -> None:
+        import pytest
+
+        logger = _logger(tmp_path)
+        shadow = _shadow()
+        with pytest.raises(ValueError, match="inferred_register"):
+            apply_correction("jokey", "reflective", shadow, logger)
+
+    def test_invalid_corrected_register_raises(self, tmp_path: Path) -> None:
+        import pytest
+
+        logger = _logger(tmp_path)
+        shadow = _shadow()
+        with pytest.raises(ValueError, match="corrected_register"):
+            apply_correction("casual", "REFLECTIVE", shadow, logger)
+
+    def test_invalid_inferred_does_not_write_to_log(self, tmp_path: Path) -> None:
+        """Guard fires before any I/O — log stays empty on invalid input."""
+        import pytest
+
+        logger = _logger(tmp_path)
+        shadow = _shadow()
+        with pytest.raises(ValueError):
+            apply_correction("bad", "reflective", shadow, logger)
+        assert logger.read_all() == []
+
+    def test_invalid_inferred_does_not_update_shadow(self, tmp_path: Path) -> None:
+        """Guard fires before shadow update — shadow stays clean on invalid input."""
+        import pytest
+
+        logger = _logger(tmp_path)
+        shadow = _shadow()
+        with pytest.raises(ValueError):
+            apply_correction("bad", "reflective", shadow, logger)
+        assert shadow.corrections_this_session == []
+
+    def test_both_registers_invalid_raises_on_inferred_first(
+        self, tmp_path: Path
+    ) -> None:
+        import pytest
+
+        logger = _logger(tmp_path)
+        shadow = _shadow()
+        with pytest.raises(ValueError, match="inferred_register"):
+            apply_correction("bad", "also_bad", shadow, logger)
+
+    def test_all_valid_registers_accepted(self, tmp_path: Path) -> None:
+        """Every value in VALID_REGISTERS is accepted without raising."""
+        for reg in sorted(VALID_REGISTERS):
+            logger = _logger(tmp_path)
+            shadow = _shadow()
+            # Should not raise
+            apply_correction(reg, reg, shadow, logger)
 
 
 # ---------------------------------------------------------------------------

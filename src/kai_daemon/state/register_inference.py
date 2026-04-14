@@ -58,9 +58,7 @@ class SessionRelationalShadow:
         [('casual', 'reflective')]
     """
 
-    corrections_this_session: list[tuple[str, str]] = field(
-        default_factory=lambda: list[tuple[str, str]]()
-    )
+    corrections_this_session: list[tuple[str, str]] = field(default_factory=list)  # type: ignore[reportUnknownVariableType]
     """(inferred_register, corrected_register) pairs — oldest first."""
 
 
@@ -102,6 +100,18 @@ VALID_REGISTERS: frozenset[str] = frozenset(
 """The four valid register values."""
 
 # ---------------------------------------------------------------------------
+# Correction history weight
+# ---------------------------------------------------------------------------
+
+_HISTORY_WEIGHT: float = 0.15
+"""Per-entry penalty/boost applied when adjusting scores from correction history.
+
+Each past correction penalises the inferred register by this amount and
+boosts the corrected register by the same amount.  Referenced by both the
+implementation and pinned arithmetic tests so a single constant controls both.
+"""
+
+# ---------------------------------------------------------------------------
 # Keyword signal tables
 # ---------------------------------------------------------------------------
 
@@ -133,7 +143,7 @@ _REFLECTIVE_SIGNALS: frozenset[str] = frozenset(
         "think",
         "thinking",
         "wonder",
-        "wondering",
+        "wondering",  # also in _EXPLORATORY_SIGNALS — dual membership intentional
         "feel",
         "feeling",
         "believe",
@@ -168,7 +178,7 @@ _EXPLORATORY_SIGNALS: frozenset[str] = frozenset(
         "might",
         "suppose",
         "hypothetical",
-        "wondering",
+        "wondering",  # also in _REFLECTIVE_SIGNALS — dual membership intentional
         "brainstorm",
         "brainstorming",
         "idea",
@@ -283,9 +293,9 @@ def _apply_correction_history_prior(
         inferred = entry.inferred_register
         corrected = entry.corrected_register
         if inferred in scores:
-            scores[inferred] -= 0.15
+            scores[inferred] -= _HISTORY_WEIGHT
         if corrected in scores:
-            scores[corrected] += 0.15
+            scores[corrected] += _HISTORY_WEIGHT
 
     return scores
 
@@ -514,6 +524,9 @@ def apply_correction(
         thread_id: Active thread ID at correction time, if any.
         metadata: Additional metadata to attach to the log entry.
 
+    Raises:
+        ValueError: If either register value is not in ``VALID_REGISTERS``.
+
     Returns:
         Acknowledgment message text — caller emits as a new message.
 
@@ -531,6 +544,16 @@ def apply_correction(
         Oh wait — you're being serious. Let me come at this differently.
         [('casual', 'reflective')]
     """
+    if inferred_register not in VALID_REGISTERS:
+        raise ValueError(
+            f"inferred_register {inferred_register!r} is not a valid register; "
+            f"expected one of {sorted(VALID_REGISTERS)}"
+        )
+    if corrected_register not in VALID_REGISTERS:
+        raise ValueError(
+            f"corrected_register {corrected_register!r} is not a valid register; "
+            f"expected one of {sorted(VALID_REGISTERS)}"
+        )
     entry = RegisterCorrectionEntry(
         inferred_register=inferred_register,
         corrected_register=corrected_register,
