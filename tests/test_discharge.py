@@ -40,7 +40,7 @@ _EXACT = _THRESHOLD  # 0.72 — exactly at threshold, does NOT pass (strict >)
 
 
 def _item(
-    type: HoldingType = HoldingType.OBSERVATION,
+    holding_type: HoldingType = HoldingType.OBSERVATION,
     register_needed: RegisterNeeded = RegisterNeeded.ANY,
     surfaced: str | None = None,
     contradiction_id: str | None = None,
@@ -48,7 +48,7 @@ def _item(
 ) -> HoldingItem:
     kwargs: dict[str, Any] = {
         "content": "something noticed",
-        "type": type,
+        "type": holding_type,
         "relevance_trigger": "when this topic comes up",
         "register_needed": register_needed,
         "urgency": Urgency.LOW,
@@ -289,7 +289,7 @@ class TestUrgentContradictionExclusion:
 
     def _contradiction_item(self) -> HoldingItem:
         return _item(
-            type=HoldingType.REASONED_DISAGREEMENT,
+            holding_type=HoldingType.REASONED_DISAGREEMENT,
             register_needed=RegisterNeeded.ANY,
             contradiction_id=str(uuid.uuid4()),
         )
@@ -301,14 +301,16 @@ class TestUrgentContradictionExclusion:
 
     def test_urgent_allows_non_contradiction(self) -> None:
         """Non-contradiction items with register_needed=ANY can discharge on urgent."""
-        item = _item(type=HoldingType.OBSERVATION, register_needed=RegisterNeeded.ANY)
+        item = _item(
+            holding_type=HoldingType.OBSERVATION, register_needed=RegisterNeeded.ANY
+        )
         result = select_discharge_candidate([item], "urgent", _scores(item))
         assert result is item
 
     def test_reflective_allows_reasoned_disagreement(self) -> None:
         """reflective + reasoned_disagreement → both gates pass, discharges."""
         item = _item(
-            type=HoldingType.REASONED_DISAGREEMENT,
+            holding_type=HoldingType.REASONED_DISAGREEMENT,
             register_needed=RegisterNeeded.REFLECTIVE,
             contradiction_id=str(uuid.uuid4()),
         )
@@ -319,7 +321,7 @@ class TestUrgentContradictionExclusion:
         """urgent blocks contradiction; non-contradiction item returned instead."""
         contradiction = self._contradiction_item()
         observation = _item(
-            type=HoldingType.OBSERVATION, register_needed=RegisterNeeded.ANY
+            holding_type=HoldingType.OBSERVATION, register_needed=RegisterNeeded.ANY
         )
         # Give contradiction a higher score to prove it's blocked by the register rule,
         # not by score ordering.
@@ -331,7 +333,7 @@ class TestUrgentContradictionExclusion:
 
     def test_exploratory_allows_reasoned_disagreement_with_any(self) -> None:
         item = _item(
-            type=HoldingType.REASONED_DISAGREEMENT,
+            holding_type=HoldingType.REASONED_DISAGREEMENT,
             register_needed=RegisterNeeded.ANY,
             contradiction_id=str(uuid.uuid4()),
         )
@@ -389,7 +391,7 @@ class TestHydrateContradiction:
     def test_hydrates_record_when_contradiction_id_present(self) -> None:
         cid = str(uuid.uuid4())
         item = _item(
-            type=HoldingType.REASONED_DISAGREEMENT,
+            holding_type=HoldingType.REASONED_DISAGREEMENT,
             contradiction_id=cid,
         )
         record = asyncio.run(hydrate_contradiction(item, _OkClient()))
@@ -402,7 +404,7 @@ class TestHydrateContradiction:
     def test_passes_contradiction_id_to_client(self) -> None:
         cid = "test-contradiction-id-123"
         item = _item(
-            type=HoldingType.REASONED_DISAGREEMENT,
+            holding_type=HoldingType.REASONED_DISAGREEMENT,
             contradiction_id=cid,
         )
         client = _OkClient()
@@ -411,7 +413,7 @@ class TestHydrateContradiction:
 
     def test_returns_none_when_client_returns_none(self) -> None:
         item = _item(
-            type=HoldingType.REASONED_DISAGREEMENT,
+            holding_type=HoldingType.REASONED_DISAGREEMENT,
             contradiction_id=str(uuid.uuid4()),
         )
         result = asyncio.run(hydrate_contradiction(item, _NoneClient()))
@@ -419,7 +421,7 @@ class TestHydrateContradiction:
 
     def test_returns_none_on_client_error_no_exception_propagated(self) -> None:
         item = _item(
-            type=HoldingType.REASONED_DISAGREEMENT,
+            holding_type=HoldingType.REASONED_DISAGREEMENT,
             contradiction_id=str(uuid.uuid4()),
         )
         result = asyncio.run(hydrate_contradiction(item, _ErrorClient()))
@@ -503,7 +505,9 @@ class TestEdgeCases:
 
     def test_urgent_with_no_contradiction_items_returns_observation(self) -> None:
         """urgent + only observations → observation discharges (register_needed=ANY)."""
-        item = _item(type=HoldingType.CONNECTION, register_needed=RegisterNeeded.ANY)
+        item = _item(
+            holding_type=HoldingType.CONNECTION, register_needed=RegisterNeeded.ANY
+        )
         result = select_discharge_candidate([item], "urgent", _scores(item))
         assert result is item
 
