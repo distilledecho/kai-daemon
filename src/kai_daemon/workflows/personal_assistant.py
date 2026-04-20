@@ -33,6 +33,7 @@ from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import cast as _cast
 
 from ..state.daemon_relational import DaemonRelational, DaemonRelationalStore
 from ..state.daemon_self import DaemonSelf, DaemonSelfStore
@@ -879,8 +880,6 @@ class PersonalAssistant:
                     and self._memory_client is not None
                     and hasattr(self._memory_client, "fetch_contradiction")
                 ):
-                    from typing import cast as _cast
-
                     contradiction_record = await hydrate_contradiction(
                         candidate,
                         _cast(ContradictionClientProtocol, self._memory_client),
