@@ -25,6 +25,7 @@ Call ``run_session_end``.  Clear working memory only when
 
 from __future__ import annotations
 
+import dataclasses
 import logging
 import re
 import uuid
@@ -734,6 +735,17 @@ class PersonalAssistant:
         wm.turn_count += 1
         turn_number = wm.turn_count
 
+        # Capture pre-turn stances before any state mutation this turn
+        pre_turn_stances: dict[str, str] = {}
+        for _entry in wm.thread_stack:
+            try:
+                _thread = self._thread_store.load(_entry.thread_id)
+                pre_turn_stances[_entry.thread_id] = (
+                    _thread.stance.epistemic_status.value
+                )
+            except KeyError:
+                pass
+
         # ------------------------------------------------------------------
         # Step 1: Infer register
         # ------------------------------------------------------------------
@@ -780,15 +792,6 @@ class PersonalAssistant:
         # ------------------------------------------------------------------
         # Step 4: Write turn note (after response — user never waits)
         # ------------------------------------------------------------------
-
-        # Capture pre-turn stances for stance movement detection
-        pre_turn_stances: dict[str, str] = {}
-        for entry in wm.thread_stack:
-            try:
-                thread = self._thread_store.load(entry.thread_id)
-                pre_turn_stances[entry.thread_id] = str(thread.stance.epistemic_status)
-            except KeyError:
-                pass
 
         stance_movements = detect_stance_movements(
             pre_turn_stances,
@@ -874,10 +877,13 @@ class PersonalAssistant:
                 if (
                     candidate.contradiction_id is not None
                     and self._memory_client is not None
-                    and isinstance(self._memory_client, ContradictionClientProtocol)
+                    and hasattr(self._memory_client, "fetch_contradiction")
                 ):
+                    from typing import cast as _cast
+
                     contradiction_record = await hydrate_contradiction(
-                        candidate, self._memory_client
+                        candidate,
+                        _cast(ContradictionClientProtocol, self._memory_client),
                     )
 
                 discharge_message = _format_discharge(candidate, contradiction_record)
@@ -910,20 +916,7 @@ class PersonalAssistant:
             )
 
         # Patch the turn note with final values
-        turn_note = TurnNote(
-            turn_id=turn_note.turn_id,
-            session_id=turn_note.session_id,
-            turn_number=turn_note.turn_number,
-            timestamp=turn_note.timestamp,
-            thread_ids_active=turn_note.thread_ids_active,
-            register=turn_note.register,
-            register_corrected=False,  # updated in step 7 if correction fires
-            topics_touched=turn_note.topics_touched,
-            stance_movements=turn_note.stance_movements,
-            artifacts_referenced=turn_note.artifacts_referenced,
-            notable=notable,
-            note=note_text,
-        )
+        turn_note = dataclasses.replace(turn_note, notable=notable, note=note_text)
 
         # ------------------------------------------------------------------
         # Step 7: Register correction pathway
@@ -949,20 +942,15 @@ class PersonalAssistant:
                 self._correction_history = self._register_inference_logger.read_all()
 
                 # Patch turn note to record correction
-                turn_note = TurnNote(
-                    turn_id=turn_note.turn_id,
-                    session_id=turn_note.session_id,
-                    turn_number=turn_note.turn_number,
-                    timestamp=turn_note.timestamp,
-                    thread_ids_active=turn_note.thread_ids_active,
-                    register=turn_note.register,
+                correction_note = (
+                    turn_note.note
+                    or f"Register correction: {prev_inferred} → {corrected}"
+                )
+                turn_note = dataclasses.replace(
+                    turn_note,
                     register_corrected=True,
-                    topics_touched=turn_note.topics_touched,
-                    stance_movements=turn_note.stance_movements,
-                    artifacts_referenced=turn_note.artifacts_referenced,
                     notable=True,
-                    note=turn_note.note
-                    or f"Register correction: {prev_inferred} → {corrected}",
+                    note=correction_note,
                 )
 
                 logger.info(
