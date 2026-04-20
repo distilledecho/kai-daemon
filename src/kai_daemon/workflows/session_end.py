@@ -29,9 +29,19 @@ from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import datetime
+from typing import Any
 
 from ..state.working_memory import WorkingMemory
-from .episodic_flush import EpisodicFlushResult, episodic_flush
+from .episodic_flush import (
+    EpisodicFlushResult,
+    GenerateEmbeddingFn,
+    UpdateCooccurrenceFn,
+    WriteHandoffNoteFn,
+    WriteSessionRecordFn,
+    WriteSessionThreadIndexFn,
+    WriteThreadEpisodeFn,
+    episodic_flush,
+)
 from .relational_update import RelationalUpdateResult, relational_update
 
 logger = logging.getLogger(__name__)
@@ -82,8 +92,8 @@ class SessionEndResult:
     flush_error: str | None = None
     """Exception message if episodic_flush failed."""
 
-    flush_errors: list[str] = field(default_factory=lambda: list[str]())
-    """All exception messages accumulated during the sequence."""
+    sequence_errors: list[str] = field(default_factory=lambda: list[str]())
+    """All exception messages accumulated during the sequence (both workflows)."""
 
 
 # ---------------------------------------------------------------------------
@@ -153,7 +163,7 @@ def run_session_end(
         except Exception as exc:
             msg = str(exc)
             result.relational_update_error = msg
-            result.flush_errors.append(f"relational_update: {msg}")
+            result.sequence_errors.append(f"relational_update: {msg}")
             logger.warning(
                 "session_end: relational_update failed session=%s: %s",
                 session_id,
@@ -174,7 +184,7 @@ def run_session_end(
         except Exception as exc:
             msg = str(exc)
             result.flush_error = msg
-            result.flush_errors.append(f"episodic_flush: {msg}")
+            result.sequence_errors.append(f"episodic_flush: {msg}")
             logger.warning(
                 "session_end: episodic_flush failed — "
                 "working memory retained session=%s: %s",
@@ -207,30 +217,33 @@ def run_session_end(
 
 def make_relational_update_fn(
     inference_fn: Callable[[str], str],
-    **store_kwargs: object,
+    store: Any | None = None,
 ) -> Callable[[WorkingMemory], RelationalUpdateResult]:
     """Return a ``relational_update_fn`` bound to *inference_fn*.
 
-    ``store_kwargs`` are forwarded to ``DaemonRelationalStore``.
+    ``store`` is an optional ``DaemonRelationalStore``.  Defaults to the
+    real store when ``None``.
     """
     from ..state.daemon_relational import DaemonRelationalStore
 
-    store = DaemonRelationalStore(**store_kwargs)  # type: ignore[arg-type]
+    _store: DaemonRelationalStore = (
+        store if store is not None else DaemonRelationalStore()
+    )
 
     def _fn(snapshot: WorkingMemory) -> RelationalUpdateResult:
-        return relational_update(snapshot, inference_fn=inference_fn, store=store)
+        return relational_update(snapshot, inference_fn=inference_fn, store=_store)
 
     return _fn
 
 
 def make_episodic_flush_fn(
     inference_fn: Callable[[str], str],
-    write_thread_episode_fn: object,
-    update_cooccurrence_fn: object,
-    write_handoff_note_fn: object,
-    write_session_record_fn: object,
-    write_session_thread_index_fn: object,
-    generate_embedding_fn: object = None,
+    write_thread_episode_fn: WriteThreadEpisodeFn,
+    update_cooccurrence_fn: UpdateCooccurrenceFn,
+    write_handoff_note_fn: WriteHandoffNoteFn,
+    write_session_record_fn: WriteSessionRecordFn,
+    write_session_thread_index_fn: WriteSessionThreadIndexFn,
+    generate_embedding_fn: GenerateEmbeddingFn | None = None,
 ) -> Callable[[WorkingMemory, datetime], EpisodicFlushResult]:
     """Return an ``episodic_flush_fn`` bound to the provided callables."""
 
@@ -238,13 +251,13 @@ def make_episodic_flush_fn(
         return episodic_flush(
             snapshot,
             ended_at,
-            inference_fn=inference_fn,  # type: ignore[arg-type]
-            write_thread_episode_fn=write_thread_episode_fn,  # type: ignore[arg-type]
-            update_cooccurrence_fn=update_cooccurrence_fn,  # type: ignore[arg-type]
-            write_handoff_note_fn=write_handoff_note_fn,  # type: ignore[arg-type]
-            write_session_record_fn=write_session_record_fn,  # type: ignore[arg-type]
-            write_session_thread_index_fn=write_session_thread_index_fn,  # type: ignore[arg-type]
-            generate_embedding_fn=generate_embedding_fn,  # type: ignore[arg-type]
+            inference_fn=inference_fn,
+            write_thread_episode_fn=write_thread_episode_fn,
+            update_cooccurrence_fn=update_cooccurrence_fn,
+            write_handoff_note_fn=write_handoff_note_fn,
+            write_session_record_fn=write_session_record_fn,
+            write_session_thread_index_fn=write_session_thread_index_fn,
+            generate_embedding_fn=generate_embedding_fn,
         )
 
     return _fn

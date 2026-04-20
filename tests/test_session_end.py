@@ -405,7 +405,7 @@ class TestRunSessionEnd:
             episodic_flush_fn=_fail_flush,
         )
         assert result.flush_succeeded is False
-        assert len(result.flush_errors) == 2
+        assert len(result.sequence_errors) == 2
 
     def test_ended_at_forwarded_to_flush(self) -> None:
         received_ended_at: list[datetime] = []
