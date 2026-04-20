@@ -95,8 +95,11 @@ def _parse_response(
         "USERS_CURRENT_REGISTER": None,
         "WHERE_DAEMON_READS_USER_WRONG": None,
     }
-    # Single-line match per label: the prompt constrains each value to one line,
-    # so multi-line responses are silently truncated to the first line captured.
+    # Assumes each label's value fits on a single line. If the model returns
+    # prose with an embedded newline before the next label, only the first line
+    # is captured and the rest is silently dropped — no warning is emitted.
+    # The prompt constrains responses to single-line values, so this is unlikely
+    # to trigger, but it is a known silent failure mode.
     pattern = re.compile(
         r"^(HOW_USER_THINKS|WHAT_USER_IS_WORKING_ON|USERS_CURRENT_REGISTER"
         r"|WHERE_DAEMON_READS_USER_WRONG):\s*(.*)$",
