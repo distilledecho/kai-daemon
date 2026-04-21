@@ -2,10 +2,13 @@
 
 Presence before retrieval (philosophy §12):
     Retrieval serves the response; it does not precede or replace presence.
-    ``conversational_retrieval`` is designed to be awaited *after* the
-    response generation has begun — results are available for
-    ``personal_assistant`` to weave in as they bear on the response, not to
-    block generation.
+    ``conversational_retrieval`` is awaited in Step 2 of ``handle_turn``,
+    before inference runs in Step 3 — retrieval gates inference rather than
+    running concurrently with it.  This is a constraint of the synchronous
+    ``inference_fn`` interface: true concurrent retrieval (where results are
+    woven in as generation proceeds) would require a streaming inference path.
+    The §12 intent is honoured in spirit — retrieval is in service of presence,
+    not a substitute for it — but the current architecture serialises the two.
 
 Primary query:
     Searches ``user_pkm`` (weight 1.0), ``daemon`` (weight 0.3), ``shared``
@@ -278,9 +281,10 @@ async def conversational_retrieval(
 ) -> RetrievalContext:
     """Perform conversational retrieval for a single turn (§4D).
 
-    Presence before retrieval (philosophy §12): this coroutine is designed to
-    be awaited after the response has begun — results serve presence, not gate
-    it.
+    Presence before retrieval (philosophy §12): this coroutine is awaited in
+    Step 2 of ``handle_turn``, before inference runs in Step 3.  Retrieval
+    gates inference under the current synchronous ``inference_fn`` interface;
+    concurrent retrieval would require a streaming inference path.
 
     Args:
         message: The user's current message text (primary query).
