@@ -118,8 +118,14 @@ def _make_handler(
                 logger.warning("action-api: kv status unreachable: %s", exc)
                 self._respond(503, {"ok": False, "error": "mlx-kv-server unreachable"})
                 return
+            # AttributeError on schema drift surfaces as an unhandled 500 —
+            # intentional: drift should be visible, not silently swallowed.
             self._respond(
-                200, {field: getattr(s, field) for field in _KV_STATUS_FIELDS}
+                200,
+                {
+                    "ok": True,
+                    **{field: getattr(s, field) for field in _KV_STATUS_FIELDS},
+                },
             )
 
         def do_POST(self) -> None:  # noqa: N802

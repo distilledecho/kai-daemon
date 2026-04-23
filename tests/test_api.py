@@ -453,19 +453,14 @@ def kv_server(
     t.join(timeout=2.0)
 
 
-def test_status_kv_returns_200(
-    kv_server: ActionServer,
-    stores: tuple[HoldingStore, BorderlinePool],
-) -> None:
+def test_status_kv_returns_200(kv_server: ActionServer) -> None:
     status, _ = _get(kv_server, "/status/kv")
     assert status == 200
 
 
-def test_status_kv_response_fields_match_schema(
-    kv_server: ActionServer,
-    stores: tuple[HoldingStore, BorderlinePool],
-) -> None:
+def test_status_kv_response_fields_match_schema(kv_server: ActionServer) -> None:
     _, body = _get(kv_server, "/status/kv")
+    assert body["ok"] is True
     assert body["cache_used_tokens"] == 100
     assert body["cache_capacity_tokens"] == 4096
     assert abs(float(body["cache_used_fraction"]) - 0.024414) < 1e-6  # type: ignore[arg-type]
