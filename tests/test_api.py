@@ -160,8 +160,13 @@ def test_unknown_action_on_valid_prefix_returns_404(server: ActionServer) -> Non
 
 def test_non_post_method_returns_501(server: ActionServer) -> None:
     # BaseHTTPRequestHandler returns 501 for methods with no do_<METHOD> handler.
-    status = _request(server, "GET", "/actions/contradiction/x/resolve")
+    status = _request(server, "DELETE", "/actions/contradiction/x/resolve")
     assert status == 501
+
+
+def test_get_unknown_route_returns_404(server: ActionServer) -> None:
+    status = _request(server, "GET", "/actions/contradiction/x/resolve")
+    assert status == 404
 
 
 # ---------------------------------------------------------------------------
@@ -391,3 +396,115 @@ def test_borderline_discard_already_discarded_returns_409(
 
     assert status == 409
     assert body["ok"] is False
+
+
+# ---------------------------------------------------------------------------
+# GET /status/kv
+# ---------------------------------------------------------------------------
+
+
+class _FakeStatus:
+    cache_used_tokens = 100
+    cache_capacity_tokens = 4096
+    cache_used_fraction = 0.024414
+    checkpoint_present = True
+    checkpoint_tokens = 80
+    last_operation = "prefill"
+    last_operation_at = "2026-04-23T10:00:00Z"
+    model = "mlx-community/Mistral-7B-v0.1-4bit"
+    uptime_seconds = 3600
+
+
+class _FakeKvClient:
+    def __init__(self, *, raises: bool = False) -> None:
+        self._raises = raises
+
+    def status(self) -> _FakeStatus:
+        if self._raises:
+            raise ConnectionRefusedError("server down")
+        return _FakeStatus()
+
+
+def _get(server: ActionServer, path: str) -> tuple[int, dict[str, object]]:
+    host, port = server.address
+    url = f"http://{host}:{port}{path}"
+    try:
+        with urllib.request.urlopen(url) as resp:
+            return int(resp.status), json.loads(resp.read())
+    except urllib.error.HTTPError as exc:
+        return exc.code, json.loads(exc.read())
+
+
+@pytest.fixture
+def kv_server(
+    stores: tuple[HoldingStore, BorderlinePool],
+) -> Iterator[ActionServer]:
+    holding, pool = stores
+    s = ActionServer(
+        port=0,
+        holding_store=holding,
+        borderline_pool=pool,
+        kv_client=_FakeKvClient(),
+    )
+    t = threading.Thread(target=s.serve_forever, daemon=True)
+    t.start()
+    yield s
+    s.shutdown()
+    t.join(timeout=2.0)
+
+
+def test_status_kv_returns_200(kv_server: ActionServer) -> None:
+    status, _ = _get(kv_server, "/status/kv")
+    assert status == 200
+
+
+def test_status_kv_response_fields_match_schema(kv_server: ActionServer) -> None:
+    _, body = _get(kv_server, "/status/kv")
+    assert body["ok"] is True
+    assert body["cache_used_tokens"] == 100
+    assert body["cache_capacity_tokens"] == 4096
+    assert abs(float(body["cache_used_fraction"]) - 0.024414) < 1e-6  # type: ignore[arg-type]
+    assert body["checkpoint_present"] is True
+    assert body["checkpoint_tokens"] == 80
+    assert body["last_operation"] == "prefill"
+    assert body["last_operation_at"] == "2026-04-23T10:00:00Z"
+    assert body["model"] == "mlx-community/Mistral-7B-v0.1-4bit"
+    assert body["uptime_seconds"] == 3600
+
+
+def test_status_kv_unreachable_returns_503(
+    stores: tuple[HoldingStore, BorderlinePool],
+) -> None:
+    holding, pool = stores
+    s = ActionServer(
+        port=0,
+        holding_store=holding,
+        borderline_pool=pool,
+        kv_client=_FakeKvClient(raises=True),
+    )
+    t = threading.Thread(target=s.serve_forever, daemon=True)
+    t.start()
+    try:
+        status, body = _get(s, "/status/kv")
+        assert status == 503
+        assert body["ok"] is False
+        assert "unreachable" in str(body["error"]).lower()
+    finally:
+        s.shutdown()
+        t.join(timeout=2.0)
+
+
+def test_status_kv_no_client_returns_503(
+    stores: tuple[HoldingStore, BorderlinePool],
+) -> None:
+    holding, pool = stores
+    s = ActionServer(port=0, holding_store=holding, borderline_pool=pool)
+    t = threading.Thread(target=s.serve_forever, daemon=True)
+    t.start()
+    try:
+        status, body = _get(s, "/status/kv")
+        assert status == 503
+        assert body["ok"] is False
+    finally:
+        s.shutdown()
+        t.join(timeout=2.0)
