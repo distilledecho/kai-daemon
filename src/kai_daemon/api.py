@@ -1,11 +1,15 @@
 """Localhost-only action API for kai-devtools (§13).
 
 Exposes four write actions that kai-devtools uses for the contradiction-resolution
-and BORDERLINE pool review surfaces.  The server binds exclusively to ``127.0.0.1``
-and is never exposed on the network.
+and BORDERLINE pool review surfaces, plus a read-only status proxy.  The server
+binds exclusively to ``127.0.0.1`` and is never exposed on the network.
 
 Endpoints
 ---------
+GET /status/kv
+    Proxy the mlx-kv-server status.  Returns ``KVServerStatus`` fields as JSON.
+    Returns 503 with ``{"ok": false, "error": "..."}`` if the server is unreachable.
+
 POST /actions/contradiction/{id}/resolve
     Discharge the holding item whose ``contradiction_id`` matches *id*,
     recording ``discharge_notes="resolve"``.
@@ -30,6 +34,7 @@ HTTP status codes
 404  Not found (unknown contradiction_id or BORDERLINE item id)
 409  Conflict (holding item already discharged; BORDERLINE item not pending)
 500  Unexpected internal error
+503  mlx-kv-server unreachable (GET /status/kv only)
 """
 
 from __future__ import annotations
@@ -58,6 +63,18 @@ _BORDERLINE_PATTERN = re.compile(
     r"^/actions/borderline/(?P<bid>[^/]+)/(?P<action>promote|discard)$"
 )
 
+_KV_STATUS_FIELDS = (
+    "cache_used_tokens",
+    "cache_capacity_tokens",
+    "cache_used_fraction",
+    "checkpoint_present",
+    "checkpoint_tokens",
+    "last_operation",
+    "last_operation_at",
+    "model",
+    "uptime_seconds",
+)
+
 
 # ---------------------------------------------------------------------------
 # Internal helpers
@@ -80,10 +97,31 @@ def _find_holding_by_contradiction_id(
 def _make_handler(
     holding_store: HoldingStore,
     borderline_pool: BorderlinePool,
+    kv_client: Any | None = None,
 ) -> type[BaseHTTPRequestHandler]:
     """Return a request handler class closed over the given stores."""
 
     class _Handler(BaseHTTPRequestHandler):
+        def do_GET(self) -> None:  # noqa: N802
+            if self.path == "/status/kv":
+                self._handle_status_kv()
+                return
+            self._respond(404, {"ok": False, "error": "not found"})
+
+        def _handle_status_kv(self) -> None:
+            if kv_client is None:
+                self._respond(503, {"ok": False, "error": "kv client not configured"})
+                return
+            try:
+                s = kv_client.status()
+            except Exception as exc:
+                logger.warning("action-api: kv status unreachable: %s", exc)
+                self._respond(503, {"ok": False, "error": "mlx-kv-server unreachable"})
+                return
+            self._respond(
+                200, {field: getattr(s, field) for field in _KV_STATUS_FIELDS}
+            )
+
         def do_POST(self) -> None:  # noqa: N802
             path: str = self.path
 
@@ -171,6 +209,10 @@ class ActionServer:
         Holding store instance.  ``None`` → default path.
     borderline_pool:
         BORDERLINE pool instance.  ``None`` → default path.
+    kv_client:
+        Any object with a ``status()`` method compatible with
+        ``MlxKvClient`` (duck-typed).  ``None`` → ``GET /status/kv``
+        returns 503 with "kv client not configured".
     """
 
     def __init__(
@@ -179,10 +221,11 @@ class ActionServer:
         *,
         holding_store: HoldingStore | None = None,
         borderline_pool: BorderlinePool | None = None,
+        kv_client: Any | None = None,
     ) -> None:
         _store = holding_store if holding_store is not None else HoldingStore()
         _pool = borderline_pool if borderline_pool is not None else BorderlinePool()
-        handler = _make_handler(_store, _pool)
+        handler = _make_handler(_store, _pool, kv_client)
         self._server = ThreadingHTTPServer((_LOCALHOST, port), handler)
         self._serving_event = threading.Event()
 
