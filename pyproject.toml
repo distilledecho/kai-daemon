@@ -12,7 +12,7 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
 ]
 description = "The daemon — persistent memory, background workflows, and inner life pipeline"
-dependencies = ["chromadb>=0.5", "pydantic>=2.0", "pyyaml>=6.0", "tiktoken>=0.7"]
+dependencies = ["chromadb>=0.5", "fastapi>=0.100", "pydantic>=2.0", "pyyaml>=6.0", "tiktoken>=0.7", "uvicorn>=0.20"]
 dynamic = ["version"]
 license.file = "LICENSE"
 readme = "README.md"
@@ -20,7 +20,9 @@ requires-python = ">=3.11"
 
 [dependency-groups]
 dev = [
+    "anyio>=3.0",
     "copier",
+    "httpx>=0.23",
     "myst-parser",
     "pre-commit",
     "pydata-sphinx-theme>=0.12",
@@ -50,8 +52,9 @@ version_file = "src/kai_daemon/_version.py"
 
 [tool.pyright]
 typeCheckingMode = "strict"
-reportMissingImports = false # Ignore missing stubs in imported modules
-reportPrivateUsage = false   # ruff SLF001 enforces this with correct test/source granularity
+reportMissingImports = false  # Ignore missing stubs in imported modules
+reportPrivateUsage = false    # ruff SLF001 enforces this with correct test/source granularity
+reportUnusedFunction = false  # FastAPI route handlers are registered via decorators
 
 [tool.pytest.ini_options]
 # Run pytest with all our checkers, and don't spam us with massive tracebacks on error

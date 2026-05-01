@@ -25,17 +25,63 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Inference placeholder
+# Inference — mlx-kv-client wiring
 # ---------------------------------------------------------------------------
 
+_KV_SOCKET_PATH: str = "/tmp/mlx-kv-server.sock"
+_INFERENCE_CACHE_ID: str = "kai-daemon-main"
 
-def _noop_inference(_prompt: str) -> str:
-    """Placeholder used before mlx-kv-client is wired up (Stage 4)."""
-    logger.warning(
-        "inference: mlx-kv-client not yet configured — "
-        "writing minimal DAEMON_SELF v1 (Stage 4 will provide real inference)"
-    )
-    return ""
+_inference_fn: Callable[[str], str] | None = None
+
+
+def _make_inference_fn() -> Callable[[str], str]:
+    """Build the real inference closure backed by mlx-kv-client.
+
+    Imports are deferred to the function body so that missing mlx packages
+    do not cause import errors in the test environment (mlx only runs on M1).
+    """
+    from mlx_kv_client import MlxKvClient  # type: ignore[import-untyped]
+    from mlx_lm import load as mlx_load  # type: ignore[import-untyped]
+
+    # Annotate explicitly as Any so pyright doesn't propagate Unknown downstream.
+    kv_client: Any = cast(Any, MlxKvClient(_KV_SOCKET_PATH))
+    status: Any = kv_client.status()
+    logger.info("inference: connected — model=%s", status.model)
+    _, tokenizer = cast(tuple[Any, Any], mlx_load(status.model, tokenizer_only=True))
+
+    def _inference(prompt: str) -> str:
+        tokens: Any = tokenizer.encode(prompt)
+        kv_client.prefill(tokens, _INFERENCE_CACHE_ID)
+        output_tokens: list[Any] = []
+        for token in kv_client.generate([tokenizer.eos_token_id], _INFERENCE_CACHE_ID):
+            output_tokens.append(token)
+        return str(tokenizer.decode(output_tokens))
+
+    _inference._kv_client = kv_client  # type: ignore[attr-defined]  # noqa: SLF001
+    return _inference
+
+
+def _get_inference_fn() -> Callable[[str], str]:
+    """Return the singleton inference callable, initialising it on first call."""
+    global _inference_fn
+    if _inference_fn is None:
+        _inference_fn = _make_inference_fn()
+    return _inference_fn
+
+
+def _shutdown_inference() -> None:
+    """Evict the KV cache entry and reset the inference singleton."""
+    global _inference_fn
+    fn = _inference_fn
+    if fn is not None:
+        kv_client = getattr(fn, "_kv_client", None)
+        if kv_client is not None:
+            try:
+                result = kv_client.evict(_INFERENCE_CACHE_ID)
+                logger.info("inference: evict result=%r", result)
+            except Exception:
+                logger.warning("inference: evict failed during shutdown", exc_info=True)
+    _inference_fn = None
 
 
 def _make_seeding_fn() -> Callable[[], None]:
@@ -43,7 +89,7 @@ def _make_seeding_fn() -> Callable[[], None]:
     from .workflows.daemon_seeding import run_daemon_seeding
 
     def _fn() -> None:
-        run_daemon_seeding(inference_fn=_noop_inference)
+        run_daemon_seeding(inference_fn=_get_inference_fn())
 
     return _fn
 
@@ -296,6 +342,12 @@ def main(args: Sequence[str] | None = None) -> None:
         help=f"Action API port (default: {DEFAULT_PORT})",
     )
     parser.add_argument(
+        "--conv-port",
+        type=int,
+        default=9272,
+        help="Conversation server port (default: 9272)",
+    )
+    parser.add_argument(
         "--log-level",
         default="INFO",
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
@@ -326,7 +378,27 @@ def main(args: Sequence[str] | None = None) -> None:
     host, port = action_server.address
     logger.info("action-api: ready at http://%s:%d", host, port)
 
-    # 3. Build and start the workflow engine.
+    # 3. Start the conversation HTTP server in a daemon thread.
+    #    Inference is initialised lazily on the first request via _get_inference_fn.
+    from .conversation_server import run_conversation_server
+
+    def _conv_inference(prompt: str) -> str:
+        return _get_inference_fn()(prompt)
+
+    conv_thread = threading.Thread(
+        target=run_conversation_server,
+        kwargs={
+            "inference_fn": _conv_inference,
+            "host": "0.0.0.0",
+            "port": parsed.conv_port,
+        },
+        daemon=True,
+        name="conv-server",
+    )
+    conv_thread.start()
+    logger.info("conv-server: starting at http://0.0.0.0:%d", parsed.conv_port)
+
+    # 4. Build and start the workflow engine.
     #    Load workflows.yaml for the SDK permission matrix, then
     #    start() evaluates startup_conditions (daemon_seeding → onboarding)
     #    and schedules background cron workflows.
@@ -335,7 +407,7 @@ def main(args: Sequence[str] | None = None) -> None:
     engine = _build_engine(run_logger, allowed_tools=_allowed_tools)
     engine.start()
 
-    # 4. Block until SIGINT / SIGTERM
+    # 5. Block until SIGINT / SIGTERM
     stop = threading.Event()
 
     def _handle_signal(signum: int, _frame: object) -> None:
@@ -350,6 +422,7 @@ def main(args: Sequence[str] | None = None) -> None:
 
     logger.info("kai-daemon: shutting down")
     engine.shutdown()
+    _shutdown_inference()
     action_server.shutdown()
     logger.info("kai-daemon: stopped")
 
