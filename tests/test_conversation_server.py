@@ -130,6 +130,42 @@ def test_chat_completions_appends_discharge_message(tmp_path: Path) -> None:
     assert "something surfaced" in content
 
 
+def test_chat_completions_appends_correction_message(tmp_path: Path) -> None:
+    """correction_message from TurnResult is appended to response content."""
+    app = _make_app(tmp_path)
+
+    mock_result = TurnResult(
+        response="main response",
+        register="casual",
+        register_confidence=0.8,
+        discharge_surfaced=False,
+        discharge_message=None,
+        correction_triggered=True,
+        correction_message="correction note",
+    )
+
+    async def _run() -> httpx.Response:
+        with patch.object(
+            PersonalAssistant,
+            "handle_turn",
+            new=AsyncMock(return_value=mock_result),
+        ):
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=app),  # type: ignore[arg-type]
+                base_url="http://test",
+            ) as client:
+                return await client.post(
+                    "/v1/chat/completions",
+                    json={"messages": _MESSAGES_HELLO},
+                )
+
+    resp = asyncio.run(_run())
+    assert resp.status_code == 200
+    content = resp.json()["choices"][0]["message"]["content"]
+    assert "main response" in content
+    assert "correction note" in content
+
+
 def test_chat_completions_reuses_same_assistant(tmp_path: Path) -> None:
     """Two requests to the same app use the same PersonalAssistant instance."""
     app = _make_app(tmp_path)

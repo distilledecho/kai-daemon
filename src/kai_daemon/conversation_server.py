@@ -39,13 +39,6 @@ __all__ = ["make_app", "run_conversation_server"]
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Module-level singleton (production: one app instance; tests use per-app state)
-# ---------------------------------------------------------------------------
-
-_assistant: PersonalAssistant | None = None
-_assistant_lock: threading.Lock = threading.Lock()
-
-# ---------------------------------------------------------------------------
 # OpenAI-compatible Pydantic models
 # ---------------------------------------------------------------------------
 
@@ -206,6 +199,8 @@ def make_app(
         content = result.response
         if result.discharge_message is not None:
             content = f"{content}\n\n{result.discharge_message}"
+        if result.correction_message is not None:
+            content = f"{content}\n\n{result.correction_message}"
         return ChatResponse(
             id=f"chatcmpl-{uuid.uuid4().hex}",
             choices=[
@@ -253,14 +248,19 @@ def run_conversation_server(
 
     state_dir = daemon_state_dir()
 
+    # TODO: wire real vector similarity scorer once daemon-memory-client is
+    # available; _zero_scores disables discharge surfacing entirely.
     def _zero_scores(_message: str, _items: list[HoldingItem]) -> dict[str, float]:
         return {}
 
+    # TODO: wire real episodic_flush here; flush_succeeded=True bypasses the
+    # working-memory gate (memory is cleared even when the memory server is down).
     def _simple_session_end(wm: WorkingMemory, _dt: Any) -> SessionEndResult:
         return SessionEndResult(session_id=wm.session_id, flush_succeeded=True)
 
     app = make_app(
         inference_fn=inference_fn,
+        # TODO: wire daemon-memory-client here; retrieval is disabled until then.
         memory_client=None,
         holding_store=HoldingStore(state_dir / "holding.yaml"),
         thread_store=ThreadStore(
