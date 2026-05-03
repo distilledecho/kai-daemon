@@ -12,7 +12,8 @@ from __future__ import annotations
 import logging
 import threading
 import uuid
-from typing import Any
+from pathlib import Path
+from typing import Any, cast
 
 import uvicorn
 from fastapi import FastAPI
@@ -237,6 +238,8 @@ def run_conversation_server(
         host: Bind address (default ``0.0.0.0``).
         port: HTTP port (default 9272).
     """
+    import yaml
+
     from .state._paths import (
         daemon_relational_history_dir,
         daemon_self_history_dir,
@@ -247,6 +250,32 @@ def run_conversation_server(
     )
 
     state_dir = daemon_state_dir()
+
+    # Load salience_config and discharge_threshold from user.yaml so they are
+    # configurable without code changes. Fall back to SalienceConfig defaults
+    # when user.yaml is absent or the relevant keys are missing.
+    _user_yaml = Path(__file__).parents[2] / "user.yaml"
+    _user_cfg: dict[str, Any] = {}
+    if _user_yaml.exists():
+        try:
+            _user_cfg = yaml.safe_load(_user_yaml.read_text()) or {}
+        except Exception:
+            logger.warning("conv-server: could not parse user.yaml — using defaults")
+
+    _thread_stack_raw = _user_cfg.get("thread_stack", {})
+    _thread_stack: dict[str, Any] = (
+        cast(dict[str, Any], _thread_stack_raw)
+        if isinstance(_thread_stack_raw, dict)
+        else {}
+    )
+    salience_config = SalienceConfig.from_dict(_thread_stack)
+
+    _holding_raw = _user_cfg.get("holding", {})
+    _holding: dict[str, Any] = (
+        cast(dict[str, Any], _holding_raw) if isinstance(_holding_raw, dict) else {}
+    )
+    _dt_raw = _holding.get("discharge_threshold", 0.72)
+    discharge_threshold = float(_dt_raw) if isinstance(_dt_raw, (int, float)) else 0.72
 
     # TODO: wire real vector similarity scorer once daemon-memory-client is
     # available; _zero_scores disables discharge surfacing entirely.
@@ -278,8 +307,8 @@ def run_conversation_server(
         register_inference_logger=RegisterInferenceLogger(
             logs_dir() / "register_inference.jsonl"
         ),
-        salience_config=SalienceConfig(),
-        discharge_threshold=0.72,
+        salience_config=salience_config,
+        discharge_threshold=discharge_threshold,
         correction_history=[],
         score_discharge_items_fn=_zero_scores,
         session_end_fn=_simple_session_end,

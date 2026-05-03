@@ -32,6 +32,7 @@ _KV_SOCKET_PATH: str = "/tmp/mlx-kv-server.sock"
 _INFERENCE_CACHE_ID: str = "kai-daemon-main"
 
 _inference_fn: Callable[[str], str] | None = None
+_inference_lock: threading.Lock = threading.Lock()
 
 
 def _make_inference_fn() -> Callable[[str], str]:
@@ -64,9 +65,10 @@ def _make_inference_fn() -> Callable[[str], str]:
 def _get_inference_fn() -> Callable[[str], str]:
     """Return the singleton inference callable, initialising it on first call."""
     global _inference_fn
-    if _inference_fn is None:
-        _inference_fn = _make_inference_fn()
-    return _inference_fn
+    with _inference_lock:
+        if _inference_fn is None:
+            _inference_fn = _make_inference_fn()
+        return _inference_fn
 
 
 def _shutdown_inference() -> None:
