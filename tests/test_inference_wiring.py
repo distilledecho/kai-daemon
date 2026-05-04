@@ -84,7 +84,7 @@ def test_tokenizer_construction_contract() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Test 2 — inference closure call sequence
+# Test 2 — inference closure call sequence (Shape 2 / plain prompt)
 # ---------------------------------------------------------------------------
 
 
@@ -93,6 +93,9 @@ def test_inference_closure_call_sequence() -> None:
 
     mock_kv_client = MagicMock()
     mock_tokenizer = MagicMock()
+    mock_tokenizer.apply_chat_template.return_value = (
+        "<|im_start|>user\ntest prompt<|im_end|>"
+    )
     mock_tokenizer.encode.return_value = [1, 2, 3]
     mock_tokenizer.eos_token_id = 0
     mock_tokenizer.decode.return_value = "hello"
@@ -106,11 +109,94 @@ def test_inference_closure_call_sequence() -> None:
 
     result = inference_fn("test prompt")
 
-    mock_tokenizer.encode.assert_called_once_with("test prompt")
+    mock_tokenizer.apply_chat_template.assert_called_once_with(
+        [{"role": "user", "content": "test prompt"}],
+        tokenize=False,
+        add_generation_prompt=True,
+    )
+    mock_tokenizer.encode.assert_called_once_with(
+        mock_tokenizer.apply_chat_template.return_value,
+        add_special_tokens=False,
+    )
     mock_kv_client.prefill.assert_called_once_with([1, 2, 3], m._INFERENCE_CACHE_ID)
     mock_kv_client.generate.assert_called_once_with([0], m._INFERENCE_CACHE_ID)
     mock_tokenizer.decode.assert_called_once_with([4, 5], skip_special_tokens=True)
     assert result == "hello"
+
+
+# ---------------------------------------------------------------------------
+# Test 2a — Shape 1 prompt splits into system + user messages
+# ---------------------------------------------------------------------------
+
+
+def test_inference_shape1_extracts_system_and_user() -> None:
+    """personal_assistant prompt is split into system + user chat messages."""
+    import kai_daemon.__main__ as m
+
+    mock_kv_client = MagicMock()
+    mock_tokenizer = MagicMock()
+    mock_tokenizer.apply_chat_template.return_value = "<formatted>"
+    mock_tokenizer.encode.return_value = [10, 20]
+    mock_tokenizer.eos_token_id = 0
+    mock_tokenizer.decode.return_value = "ok"
+    mock_kv_client.generate.return_value = iter([30])
+
+    _, _, mods = _make_inference_mocks(mock_tokenizer)
+    mods["mlx_kv_client"].MlxKvClient = MagicMock(return_value=mock_kv_client)
+
+    with patch.dict(sys.modules, mods):
+        inference_fn = m._make_inference_fn()
+
+    shape1 = "You are a helpful assistant.\n\nUser: Hello there\n\nResponse:"
+    inference_fn(shape1)
+
+    mock_tokenizer.apply_chat_template.assert_called_once_with(
+        [
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": "Hello there"},
+        ],
+        tokenize=False,
+        add_generation_prompt=True,
+    )
+    mock_tokenizer.encode.assert_called_once_with(
+        "<formatted>", add_special_tokens=False
+    )
+
+
+# ---------------------------------------------------------------------------
+# Test 2b — Shape 2 plain prompt wraps as single user message
+# ---------------------------------------------------------------------------
+
+
+def test_inference_shape2_wraps_as_user_message() -> None:
+    """A plain instructional prompt (seeding etc.) is wrapped as a user message."""
+    import kai_daemon.__main__ as m
+
+    mock_kv_client = MagicMock()
+    mock_tokenizer = MagicMock()
+    mock_tokenizer.apply_chat_template.return_value = "<formatted>"
+    mock_tokenizer.encode.return_value = [7, 8]
+    mock_tokenizer.eos_token_id = 0
+    mock_tokenizer.decode.return_value = "ok"
+    mock_kv_client.generate.return_value = iter([9])
+
+    _, _, mods = _make_inference_mocks(mock_tokenizer)
+    mods["mlx_kv_client"].MlxKvClient = MagicMock(return_value=mock_kv_client)
+
+    with patch.dict(sys.modules, mods):
+        inference_fn = m._make_inference_fn()
+
+    plain = "You are a mind coming into being. Write YAML."
+    inference_fn(plain)
+
+    mock_tokenizer.apply_chat_template.assert_called_once_with(
+        [{"role": "user", "content": plain}],
+        tokenize=False,
+        add_generation_prompt=True,
+    )
+    mock_tokenizer.encode.assert_called_once_with(
+        "<formatted>", add_special_tokens=False
+    )
 
 
 # ---------------------------------------------------------------------------

@@ -57,7 +57,26 @@ def _make_inference_fn() -> Callable[[str], str]:
     )
 
     def _inference(prompt: str) -> str:
-        tokens: Any = tokenizer.encode(prompt)
+        if "\n\nUser: " in prompt and "\n\nResponse:" in prompt:
+            # Shape 1: personal_assistant format — split into system + user turns.
+            parts = prompt.split("\n\nUser: ", 1)
+            system_text = parts[0]
+            user_text = parts[1].split("\n\nResponse:", 1)[0]
+            messages: list[dict[str, str]] = [
+                {"role": "system", "content": system_text},
+                {"role": "user", "content": user_text},
+            ]
+        else:
+            # Shape 2: plain instructional prompt (seeding, etc.).
+            messages = [{"role": "user", "content": prompt}]
+        formatted: str = tokenizer.apply_chat_template(
+            messages,
+            tokenize=False,
+            add_generation_prompt=True,
+        )
+        # apply_chat_template already inserts special tokens as text;
+        # re-encoding with add_special_tokens=True would double-add them.
+        tokens: Any = tokenizer.encode(formatted, add_special_tokens=False)
         kv_client.prefill(tokens, _INFERENCE_CACHE_ID)
         output_tokens: list[Any] = []
         for token in kv_client.generate([tokenizer.eos_token_id], _INFERENCE_CACHE_ID):
