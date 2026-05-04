@@ -61,6 +61,21 @@ def test_parse_yaml_with_code_fence() -> None:
     assert "hello" in ds.who_daemon_is
 
 
+def test_parse_yaml_with_preamble_and_code_fence() -> None:
+    """Preamble before the fence: yaml_start skips opening line but leaves
+    the closing ``` in the text. The trailing-fence strip must remove it."""
+    response = (
+        "Here is my self-conception:\n\n"
+        "```yaml\n"
+        "who_daemon_is: A mind that emerged from preamble.\n"
+        "daemon_on_daemon: Still here.\n"
+        "```"
+    )
+    ds = _parse_seeding_response(response)
+    assert "preamble" in ds.who_daemon_is
+    assert isinstance(ds, DaemonSelf)
+
+
 def test_parse_empty_response_gives_empty_daemon_self() -> None:
     # Empty string is valid YAML (None → empty dict) so we get an empty DaemonSelf,
     # not the exception-path fallback.
@@ -76,26 +91,47 @@ def test_parse_garbage_response_fallback() -> None:
     assert ds.who_daemon_is
 
 
-def test_parse_strips_thinking_block() -> None:
-    response = (
-        "<think>\nSome internal reasoning here.\nMultiple lines.\n</think>\n"
-        "who_daemon_is: A curious mind.\n"
-    )
-    ds = _parse_seeding_response(response)
-    assert "curious" in ds.who_daemon_is
-    assert "<think>" not in ds.who_daemon_is
-
-
-def test_parse_strips_thinking_block_and_code_fence() -> None:
-    response = (
-        "<think>\nReasoning about format.\n</think>\n"
-        "```yaml\n"
-        "who_daemon_is: A structured mind.\n"
-        "```"
-    )
+def test_parse_strips_code_fence() -> None:
+    response = "```yaml\nwho_daemon_is: A structured mind.\n```"
     ds = _parse_seeding_response(response)
     assert "structured" in ds.who_daemon_is
-    assert "<think>" not in ds.who_daemon_is
+
+
+def test_parse_bracket_placeholders_triggers_fallback() -> None:
+    """Bracket notation on inline YAML values is parsed as a list, failing pydantic."""
+    response = """\
+who_daemon_is: |
+  [1-3 sentences about your fundamental nature]
+current_fascinations:
+  - topic: [topic name]
+    what_daemon_finds_interesting: [what specifically draws you here]
+    origin: seeding
+    status: active
+    development_count: 0
+aesthetic_sensibilities: |
+  [1-2 sentences about what you find beautiful]
+open_questions:
+  - question: [a question you genuinely carry]
+    why_unresolved: [why this question stays open]
+daemon_on_daemon: |
+  [1-2 sentences of meta-awareness]
+"""
+    ds = _parse_seeding_response(response)
+    # Pydantic rejects the list values for topic/question; fallback sentinel is set.
+    assert ds.daemon_on_daemon == "I exist. I am curious. I am here."
+
+
+def test_parse_strips_role_label_before_yaml() -> None:
+    """Bare role label before YAML is skipped by the yaml_start search."""
+    response = (
+        "assistant\n"
+        "\n"
+        "who_daemon_is: A mind that arrived without preamble.\n"
+        "daemon_on_daemon: I noticed I prefixed myself.\n"
+    )
+    ds = _parse_seeding_response(response)
+    assert "arrived without preamble" in ds.who_daemon_is
+    assert isinstance(ds, DaemonSelf)
 
 
 # ---------------------------------------------------------------------------

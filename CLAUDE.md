@@ -53,6 +53,21 @@ Run `uv run tox` before signing off on any session. All four environments
 After fixing any tox failures, commit immediately once all four environments
 pass — do not wait for the user to ask.
 
+## Benchmarking
+
+`benchmark_tps.py` at the repo root measures token throughput against a live
+mlx-kv-server. Run it on the host (not inside the devcontainer — the Unix
+socket doesn't cross the OrbStack VM boundary):
+
+```bash
+cd ~/dev/kai-daemon
+uv run python3 benchmark_tps.py
+```
+
+Runs 3 short prompts with `enable_thinking=False` and reports per-round and
+average tokens/sec. Uses `MLX_KV_SOCKET_PATH` env var if set, otherwise
+defaults to `/tmp/mlx-kv-server.sock`.
+
 ## Architecture references
 
 Full spec: `/workspaces/kai-project/docs/kai-technical.md` Stages 1–4

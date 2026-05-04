@@ -16,7 +16,10 @@
         "UV_PROJECT_ENVIRONMENT": "/cache/venv-for${localWorkspaceFolder}",
         // Do the equivalent of "activate" the venv so we don't have to "uv run" everything
         "VIRTUAL_ENV": "/cache/venv-for${localWorkspaceFolder}",
-        "PATH": "/cache/venv-for${localWorkspaceFolder}/bin:${containerEnv:PATH}"
+        "PATH": "/cache/venv-for${localWorkspaceFolder}/bin:${containerEnv:PATH}",
+        // MLX_KV_SOCKET_PATH is intentionally NOT set here: OrbStack's Linux VM
+        // cannot connect to macOS Unix sockets even when the socket file is mounted.
+        // Run integration tests on the host directly (see tests/test_inference_integration.py).
     },
     "customizations": {
         "vscode": {
@@ -64,7 +67,10 @@
             "source": "devcontainer-shared-cache",
             "target": "/cache",
             "type": "volume"
-        }
+        },
+        // mlx-kv-server socket is NOT mounted here: Unix sockets are kernel objects
+        // and do not cross the OrbStack VM boundary, so mounting the socket file
+        // achieves nothing. Run integration tests on the host instead.
     ],
     // Mount the parent as /workspaces so we can pip install peers as editable
     "workspaceMount": "source=${localWorkspaceFolder}/..,target=/workspaces,type=bind",

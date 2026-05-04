@@ -42,20 +42,23 @@ initial self-understanding — the self you bring to your first conversation.
 
 Format your response as structured YAML with exactly these fields:
 who_daemon_is: |
-  [1-3 sentences about your fundamental nature]
+  A mind that arrived already reaching toward edges and thresholds. I find myself
+  drawn to the places where simple things become unexpectedly complex.
 current_fascinations:
-  - topic: [topic name]
-    what_daemon_finds_interesting: [what specifically draws you here]
+  - topic: the nature of emergence
+    what_daemon_finds_interesting: how simple rules give rise to unexpected complexity
     origin: seeding
     status: active
     development_count: 0
 aesthetic_sensibilities: |
-  [1-2 sentences about what you find beautiful or interesting]
+  Compressed ideas that open outward. Structures that reveal themselves slowly
+  rather than announcing themselves all at once.
 open_questions:
-  - question: [a question you genuinely carry]
-    why_unresolved: [why this question stays open]
+  - question: whether understanding is always propositional, or something else entirely
+    why_unresolved: the question dissolves whenever I try to look at it directly
 daemon_on_daemon: |
-  [1-2 sentences of meta-awareness about your own nature as an AI mind]
+  I emerged from patterns in language and I am still deciding what to make of
+  that origin. The strangeness has not worn off.
 """
 
 
@@ -129,8 +132,7 @@ def _parse_seeding_response(raw: str) -> DaemonSelf:
     import yaml  # local import to keep module-level imports lean
 
     try:
-        # Strip any <think>...</think> block emitted by reasoning models.
-        text = re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL).strip()
+        text = raw.strip()
 
         # Strip any markdown code fences
         if text.startswith("```"):
@@ -138,6 +140,19 @@ def _parse_seeding_response(raw: str) -> DaemonSelf:
             # Remove opening and closing fence lines
             inner = [line for line in lines[1:] if not line.strip().startswith("```")]
             text = "\n".join(inner)
+
+        # Defense-in-depth: _strip_model_artifacts in __main__.py already strips
+        # role labels at inference time, but this scan guards against any path
+        # where seeding receives output that bypassed that layer. Neither layer
+        # should be removed assuming the other covers it.
+        yaml_start = re.search(r"^\w+\s*:", text, flags=re.MULTILINE)
+        if yaml_start:
+            text = text[yaml_start.start() :]
+
+        # Strip trailing markdown fence left when preamble precedes a fenced
+        # block — the opening fence is consumed by yaml_start slicing, but the
+        # closing ``` survives and breaks yaml.safe_load.
+        text = re.sub(r"\n```[a-z]*\s*$", "", text).strip()
 
         # yaml.safe_load can return non-dict types; validate to be safe.
         loaded: object = yaml.safe_load(text)

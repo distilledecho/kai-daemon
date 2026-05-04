@@ -61,6 +61,97 @@ def _make_inference_mocks(
 
 
 # ---------------------------------------------------------------------------
+# Normalizer registry tests
+# ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# Chat template kwargs registry tests
+# ---------------------------------------------------------------------------
+
+
+def test_get_chat_template_kwargs_qwen3() -> None:
+    import kai_daemon.__main__ as m
+
+    kwargs = m._get_chat_template_kwargs("mlx-community/Qwen3.5-35B-A3B-4bit")
+    assert kwargs == {"enable_thinking": False}
+
+
+def test_get_chat_template_kwargs_unknown_returns_empty() -> None:
+    import kai_daemon.__main__ as m
+
+    kwargs = m._get_chat_template_kwargs("some-unknown-model-v1")
+    assert kwargs == {}
+
+
+# ---------------------------------------------------------------------------
+# Normalizer registry tests
+# ---------------------------------------------------------------------------
+
+
+def test_get_normalizer_qwen3_family() -> None:
+    import kai_daemon.__main__ as m
+
+    fn = m._get_normalizer("mlx-community/Qwen3.5-35B-A3B-4bit")
+    assert fn is m._strip_model_artifacts
+
+
+def test_get_normalizer_qwen2_family() -> None:
+    import kai_daemon.__main__ as m
+
+    fn = m._get_normalizer("Qwen2-7B-Instruct")
+    assert fn is m._strip_model_artifacts
+
+
+def test_get_normalizer_unknown_returns_generic() -> None:
+    import kai_daemon.__main__ as m
+
+    fn = m._get_normalizer("some-unknown-model-v1")
+    assert fn is m._strip_generic_artifacts
+
+
+def test_strip_model_artifacts_role_label_then_think_then_response() -> None:
+    import kai_daemon.__main__ as m
+
+    raw = "\nassistant\n<think>\n\n</think>\n\nActual response"
+    assert m._strip_model_artifacts(raw) == "Actual response"
+
+
+def test_strip_model_artifacts_multiline_think_block() -> None:
+    import kai_daemon.__main__ as m
+
+    raw = "<think>multi\nline\nthinking</think>\n\nActual response"
+    assert m._strip_model_artifacts(raw) == "Actual response"
+
+
+def test_strip_model_artifacts_clean_input_is_noop() -> None:
+    import kai_daemon.__main__ as m
+
+    raw = "Actual response"
+    assert m._strip_model_artifacts(raw) == "Actual response"
+
+
+def test_strip_model_artifacts_role_label_at_end_no_trailing_newline() -> None:
+    import kai_daemon.__main__ as m
+
+    raw = "Some response text\nassistant"
+    assert m._strip_model_artifacts(raw) == "Some response text"
+
+
+def test_strip_model_artifacts_role_word_mid_line_is_preserved() -> None:
+    import kai_daemon.__main__ as m
+
+    raw = "system is broken\n\nHello"
+    assert m._strip_model_artifacts(raw) == "system is broken\n\nHello"
+
+
+def test_strip_generic_artifacts_strips_whitespace() -> None:
+    import kai_daemon.__main__ as m
+
+    assert m._strip_generic_artifacts("  hello\n") == "hello"
+
+
+# ---------------------------------------------------------------------------
 # Test 1 — tokenizer construction contract
 # ---------------------------------------------------------------------------
 
@@ -84,7 +175,7 @@ def test_tokenizer_construction_contract() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Test 2 — inference closure call sequence
+# Test 2 — inference closure call sequence (Shape 2 / plain prompt)
 # ---------------------------------------------------------------------------
 
 
@@ -93,6 +184,9 @@ def test_inference_closure_call_sequence() -> None:
 
     mock_kv_client = MagicMock()
     mock_tokenizer = MagicMock()
+    mock_tokenizer.apply_chat_template.return_value = (
+        "<|im_start|>user\ntest prompt<|im_end|>"
+    )
     mock_tokenizer.encode.return_value = [1, 2, 3]
     mock_tokenizer.eos_token_id = 0
     mock_tokenizer.decode.return_value = "hello"
@@ -106,11 +200,98 @@ def test_inference_closure_call_sequence() -> None:
 
     result = inference_fn("test prompt")
 
-    mock_tokenizer.encode.assert_called_once_with("test prompt")
-    mock_kv_client.prefill.assert_called_once_with([1, 2, 3], m._INFERENCE_CACHE_ID)
-    mock_kv_client.generate.assert_called_once_with([0], m._INFERENCE_CACHE_ID)
+    mock_tokenizer.apply_chat_template.assert_called_once_with(
+        [{"role": "user", "content": "test prompt"}],
+        tokenize=False,
+        add_generation_prompt=True,
+    )
+    mock_tokenizer.encode.assert_called_once_with(
+        mock_tokenizer.apply_chat_template.return_value,
+        add_special_tokens=False,
+    )
+    # evict is called once before prefill to prevent cross-call contamination
+    mock_kv_client.evict.assert_called_once_with(m._INFERENCE_CACHE_ID)
+    # prefill receives all tokens except the last
+    mock_kv_client.prefill.assert_called_once_with([1, 2], m._INFERENCE_CACHE_ID)
+    # generate receives only the last token (the generation trigger, not EOS)
+    mock_kv_client.generate.assert_called_once_with([3], m._INFERENCE_CACHE_ID)
     mock_tokenizer.decode.assert_called_once_with([4, 5], skip_special_tokens=True)
     assert result == "hello"
+
+
+# ---------------------------------------------------------------------------
+# Test 2a — Shape 1 prompt splits into system + user messages
+# ---------------------------------------------------------------------------
+
+
+def test_inference_shape1_extracts_system_and_user() -> None:
+    """personal_assistant prompt is split into system + user chat messages."""
+    import kai_daemon.__main__ as m
+
+    mock_kv_client = MagicMock()
+    mock_tokenizer = MagicMock()
+    mock_tokenizer.apply_chat_template.return_value = "<formatted>"
+    mock_tokenizer.encode.return_value = [10, 20]
+    mock_tokenizer.eos_token_id = 0
+    mock_tokenizer.decode.return_value = "ok"
+    mock_kv_client.generate.return_value = iter([30])
+
+    _, _, mods = _make_inference_mocks(mock_tokenizer)
+    mods["mlx_kv_client"].MlxKvClient = MagicMock(return_value=mock_kv_client)
+
+    with patch.dict(sys.modules, mods):
+        inference_fn = m._make_inference_fn()
+
+    shape1 = "You are a helpful assistant.\n\nUser: Hello there\n\nResponse:"
+    inference_fn(shape1)
+
+    mock_tokenizer.apply_chat_template.assert_called_once_with(
+        [
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": "Hello there"},
+        ],
+        tokenize=False,
+        add_generation_prompt=True,
+    )
+    mock_tokenizer.encode.assert_called_once_with(
+        "<formatted>", add_special_tokens=False
+    )
+
+
+# ---------------------------------------------------------------------------
+# Test 2b — Shape 2 plain prompt wraps as single user message
+# ---------------------------------------------------------------------------
+
+
+def test_inference_shape2_wraps_as_user_message() -> None:
+    """A plain instructional prompt (seeding etc.) is wrapped as a user message."""
+    import kai_daemon.__main__ as m
+
+    mock_kv_client = MagicMock()
+    mock_tokenizer = MagicMock()
+    mock_tokenizer.apply_chat_template.return_value = "<formatted>"
+    mock_tokenizer.encode.return_value = [7, 8]
+    mock_tokenizer.eos_token_id = 0
+    mock_tokenizer.decode.return_value = "ok"
+    mock_kv_client.generate.return_value = iter([9])
+
+    _, _, mods = _make_inference_mocks(mock_tokenizer)
+    mods["mlx_kv_client"].MlxKvClient = MagicMock(return_value=mock_kv_client)
+
+    with patch.dict(sys.modules, mods):
+        inference_fn = m._make_inference_fn()
+
+    plain = "You are a mind coming into being. Write YAML."
+    inference_fn(plain)
+
+    mock_tokenizer.apply_chat_template.assert_called_once_with(
+        [{"role": "user", "content": plain}],
+        tokenize=False,
+        add_generation_prompt=True,
+    )
+    mock_tokenizer.encode.assert_called_once_with(
+        "<formatted>", add_special_tokens=False
+    )
 
 
 # ---------------------------------------------------------------------------

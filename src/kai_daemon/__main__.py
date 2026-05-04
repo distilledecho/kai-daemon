@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import signal
 import threading
 from argparse import ArgumentParser
@@ -17,6 +18,10 @@ from .api import DEFAULT_PORT, ActionServer
 from .engine import TriggerType, WorkflowEngine, WorkflowSpec
 from .state.observability import WorkflowRunLogger
 from .workflows.onboarding import run_onboarding
+from .workflows.personal_assistant import (
+    _PROMPT_RESPONSE_MARKER,
+    _PROMPT_USER_MARKER,
+)
 from .workflows.preemption import PreemptionMode
 
 __all__ = ["main"]
@@ -33,6 +38,57 @@ _INFERENCE_CACHE_ID: str = "kai-daemon-main"
 
 _inference_fn: Callable[[str], str] | None = None
 _inference_lock: threading.Lock = threading.Lock()
+
+
+# ---------------------------------------------------------------------------
+# Output normalizers — one per model family, selected at construction time
+# ---------------------------------------------------------------------------
+
+
+def _strip_model_artifacts(text: str) -> str:
+    """Strip common model output artifacts present in all chat model families.
+
+    Removes <think>...</think> blocks and bare role-label lines ("assistant",
+    "user", "system") that some models emit before their actual output.
+    """
+    text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
+    text = re.sub(r"(?m)^\s*(assistant|user|system)\s*$\n?", "", text)
+    return text.strip()
+
+
+def _strip_generic_artifacts(text: str) -> str:
+    """Fallback normalizer — strips leading/trailing whitespace only."""
+    return text.strip()
+
+
+_NORMALIZERS: list[tuple[str, Callable[[str], str]]] = [
+    ("qwen3", _strip_model_artifacts),
+    ("qwen2", _strip_model_artifacts),  # same artifact family
+]
+
+
+def _get_normalizer(model_name: str) -> Callable[[str], str]:
+    """Return the normalizer for *model_name* via case-insensitive substring match."""
+    lower = model_name.lower()
+    for prefix, fn in _NORMALIZERS:
+        if prefix in lower:
+            return fn
+    return _strip_generic_artifacts
+
+
+_CHAT_TEMPLATE_KWARGS: list[tuple[str, dict[str, Any]]] = [
+    ("qwen3", {"enable_thinking": False}),
+    ("qwen2", {}),
+]
+
+
+def _get_chat_template_kwargs(model_name: str) -> dict[str, Any]:
+    """Return apply_chat_template kwargs for *model_name*, matched by substring."""
+    lower = model_name.lower()
+    for pattern, kwargs in _CHAT_TEMPLATE_KWARGS:
+        if pattern in lower:
+            return kwargs
+    return {}
 
 
 def _make_inference_fn() -> Callable[[str], str]:
@@ -56,14 +112,54 @@ def _make_inference_fn() -> Callable[[str], str]:
         local_files_only=True,
     )
 
-    def _inference(prompt: str) -> str:
-        tokens: Any = tokenizer.encode(prompt)
-        kv_client.prefill(tokens, _INFERENCE_CACHE_ID)
-        output_tokens: list[Any] = []
-        for token in kv_client.generate([tokenizer.eos_token_id], _INFERENCE_CACHE_ID):
-            output_tokens.append(token)
-        return str(tokenizer.decode(output_tokens, skip_special_tokens=True))
+    normalizer = _get_normalizer(status.model)
+    logger.info("inference: output normalizer=%s", normalizer.__name__)
 
+    chat_template_kwargs = _get_chat_template_kwargs(status.model)
+    logger.info("inference: chat_template_kwargs=%r", chat_template_kwargs)
+
+    def _inference(prompt: str) -> str:
+        if _PROMPT_USER_MARKER in prompt and _PROMPT_RESPONSE_MARKER in prompt:
+            # Shape 1: personal_assistant format — split into system + user turns.
+            # Assumption: user message does not contain _PROMPT_RESPONSE_MARKER.
+            # If it does, the message will be silently truncated at that string.
+            # This is acceptable for normal conversational input.
+            parts = prompt.split(_PROMPT_USER_MARKER, 1)
+            system_text = parts[0]
+            user_text = parts[1].split(_PROMPT_RESPONSE_MARKER, 1)[0]
+            messages: list[dict[str, str]] = [
+                {"role": "system", "content": system_text},
+                {"role": "user", "content": user_text},
+            ]
+        else:
+            # Shape 2: plain instructional prompt (seeding, etc.).
+            messages = [{"role": "user", "content": prompt}]
+        formatted: str = tokenizer.apply_chat_template(
+            messages,
+            tokenize=False,
+            add_generation_prompt=True,
+            **chat_template_kwargs,
+        )
+        # apply_chat_template already inserts special tokens as text;
+        # re-encoding with add_special_tokens=True would double-add them.
+        tokens: Any = tokenizer.encode(formatted, add_special_tokens=False)
+        # Evict before each call so cross-call context can't accumulate.
+        try:
+            kv_client.evict(_INFERENCE_CACHE_ID)
+        except Exception:
+            pass  # cache may not exist on first call
+        # Prefill all tokens except the last, then pass the last token to
+        # generate. The final token of apply_chat_template output is the
+        # generation trigger; passing EOS there instead causes echo.
+        kv_client.prefill(tokens[:-1], _INFERENCE_CACHE_ID)
+        output_tokens: list[Any] = []
+        for token in kv_client.generate([tokens[-1]], _INFERENCE_CACHE_ID):
+            output_tokens.append(token)
+        return normalizer(tokenizer.decode(output_tokens, skip_special_tokens=True))
+
+    # _kv_client is read by _make_seeding_fn to evict the cache after seeding.
+    # If this closure is refactored, ensure that attribute remains accessible
+    # or the post-seeding evict silently becomes a no-op.
     _inference._kv_client = kv_client  # type: ignore[attr-defined]  # noqa: SLF001
     return _inference
 
@@ -98,6 +194,22 @@ def _make_seeding_fn() -> Callable[[], None]:
 
     def _fn() -> None:
         run_daemon_seeding(inference_fn=_get_inference_fn())
+        # Evict KV cache after seeding so conversation starts clean.
+        # Without this, conversation prefill extends the seeding context
+        # and the model echoes the user message as a continuation.
+        fn = _inference_fn
+        if fn is not None:
+            kv_client = getattr(fn, "_kv_client", None)
+            if kv_client is not None:
+                try:
+                    kv_client.evict(_INFERENCE_CACHE_ID)
+                    logger.info(
+                        "inference: seeding cache evicted — ready for conversation"
+                    )
+                except Exception:
+                    logger.warning(
+                        "inference: failed to evict seeding cache", exc_info=True
+                    )
 
     return _fn
 
