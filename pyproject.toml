@@ -30,7 +30,7 @@ requires-python = ">=3.11"
 # Apple Silicon inference dependencies — not installed in devcontainer.
 # mlx-kv-client is installed as an editable local package:
 #   uv add --editable ../mlx-kv-client
-# Do not add mlx-lm or mlx-kv-client to core dependencies.
+# Do not add mlx-lm to core dependencies.
 # Do not add `transformers` to any dependency group — it arrives
 # transitively and must not be declared.
 inference = [
