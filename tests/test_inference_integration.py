@@ -6,6 +6,7 @@ so this file is safe on CI and on machines without mlx-kv-server running.
 
 from __future__ import annotations
 
+import os
 import socket
 
 import pytest
@@ -16,11 +17,13 @@ from kai_daemon.workflows.personal_assistant import (
     _PROMPT_USER_MARKER,
 )
 
+_KV_SOCKET_PATH = os.environ.get("MLX_KV_SOCKET_PATH", "/tmp/mlx-kv-server.sock")
+
 
 def _kv_server_reachable() -> bool:
     s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     try:
-        s.connect("/tmp/mlx-kv-server.sock")
+        s.connect(_KV_SOCKET_PATH)
         return True
     except OSError:
         return False
@@ -30,7 +33,7 @@ def _kv_server_reachable() -> bool:
 
 requires_kv_server = pytest.mark.skipif(
     not _kv_server_reachable(),
-    reason="mlx-kv-server not reachable at /tmp/mlx-kv-server.sock",
+    reason=f"mlx-kv-server not reachable at {_KV_SOCKET_PATH}",
 )
 
 

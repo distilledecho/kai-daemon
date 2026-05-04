@@ -16,7 +16,9 @@
         "UV_PROJECT_ENVIRONMENT": "/cache/venv-for${localWorkspaceFolder}",
         // Do the equivalent of "activate" the venv so we don't have to "uv run" everything
         "VIRTUAL_ENV": "/cache/venv-for${localWorkspaceFolder}",
-        "PATH": "/cache/venv-for${localWorkspaceFolder}/bin:${containerEnv:PATH}"
+        "PATH": "/cache/venv-for${localWorkspaceFolder}/bin:${containerEnv:PATH}",
+        // Explicit path to the mlx-kv-server socket (matches the bind mount below)
+        "MLX_KV_SOCKET_PATH": "/tmp/mlx-kv-server.sock"
     },
     "customizations": {
         "vscode": {
@@ -64,6 +66,13 @@
             "source": "devcontainer-shared-cache",
             "target": "/cache",
             "type": "volume"
+        },
+        // mlx-kv-server Unix socket — must exist on host before container start.
+        // Start mlx-kv-server on the host first, then rebuild the container.
+        {
+            "source": "/tmp/mlx-kv-server.sock",
+            "target": "/tmp/mlx-kv-server.sock",
+            "type": "bind"
         }
     ],
     // Mount the parent as /workspaces so we can pip install peers as editable
