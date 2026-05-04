@@ -149,6 +149,11 @@ def _parse_seeding_response(raw: str) -> DaemonSelf:
         if yaml_start:
             text = text[yaml_start.start() :]
 
+        # Strip trailing markdown fence left when preamble precedes a fenced
+        # block — the opening fence is consumed by yaml_start slicing, but the
+        # closing ``` survives and breaks yaml.safe_load.
+        text = re.sub(r"\n```[a-z]*\s*$", "", text).strip()
+
         # yaml.safe_load can return non-dict types; validate to be safe.
         loaded: object = yaml.safe_load(text)
         if not isinstance(loaded, dict):

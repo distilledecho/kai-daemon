@@ -178,8 +178,12 @@ def test_inference_closure_call_sequence() -> None:
         mock_tokenizer.apply_chat_template.return_value,
         add_special_tokens=False,
     )
-    mock_kv_client.prefill.assert_called_once_with([1, 2, 3], m._INFERENCE_CACHE_ID)
-    mock_kv_client.generate.assert_called_once_with([0], m._INFERENCE_CACHE_ID)
+    # evict is called once before prefill to prevent cross-call contamination
+    mock_kv_client.evict.assert_called_once_with(m._INFERENCE_CACHE_ID)
+    # prefill receives all tokens except the last
+    mock_kv_client.prefill.assert_called_once_with([1, 2], m._INFERENCE_CACHE_ID)
+    # generate receives only the last token (the generation trigger, not EOS)
+    mock_kv_client.generate.assert_called_once_with([3], m._INFERENCE_CACHE_ID)
     mock_tokenizer.decode.assert_called_once_with([4, 5], skip_special_tokens=True)
     assert result == "hello"
 

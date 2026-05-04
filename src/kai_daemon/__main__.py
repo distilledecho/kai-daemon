@@ -121,9 +121,17 @@ def _make_inference_fn() -> Callable[[str], str]:
         # apply_chat_template already inserts special tokens as text;
         # re-encoding with add_special_tokens=True would double-add them.
         tokens: Any = tokenizer.encode(formatted, add_special_tokens=False)
-        kv_client.prefill(tokens, _INFERENCE_CACHE_ID)
+        # Evict before each call so cross-call context can't accumulate.
+        try:
+            kv_client.evict(_INFERENCE_CACHE_ID)
+        except Exception:
+            pass  # cache may not exist on first call
+        # Prefill all tokens except the last, then pass the last token to
+        # generate. The final token of apply_chat_template output is the
+        # generation trigger; passing EOS there instead causes echo.
+        kv_client.prefill(tokens[:-1], _INFERENCE_CACHE_ID)
         output_tokens: list[Any] = []
-        for token in kv_client.generate([tokenizer.eos_token_id], _INFERENCE_CACHE_ID):
+        for token in kv_client.generate([tokens[-1]], _INFERENCE_CACHE_ID):
             output_tokens.append(token)
         return normalizer(tokenizer.decode(output_tokens, skip_special_tokens=True))
 

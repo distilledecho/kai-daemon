@@ -61,6 +61,21 @@ def test_parse_yaml_with_code_fence() -> None:
     assert "hello" in ds.who_daemon_is
 
 
+def test_parse_yaml_with_preamble_and_code_fence() -> None:
+    """Preamble before the fence: yaml_start skips opening line but leaves
+    the closing ``` in the text. The trailing-fence strip must remove it."""
+    response = (
+        "Here is my self-conception:\n\n"
+        "```yaml\n"
+        "who_daemon_is: A mind that emerged from preamble.\n"
+        "daemon_on_daemon: Still here.\n"
+        "```"
+    )
+    ds = _parse_seeding_response(response)
+    assert "preamble" in ds.who_daemon_is
+    assert isinstance(ds, DaemonSelf)
+
+
 def test_parse_empty_response_gives_empty_daemon_self() -> None:
     # Empty string is valid YAML (None → empty dict) so we get an empty DaemonSelf,
     # not the exception-path fallback.
