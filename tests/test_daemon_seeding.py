@@ -76,32 +76,15 @@ def test_parse_garbage_response_fallback() -> None:
     assert ds.who_daemon_is
 
 
-def test_parse_strips_thinking_block() -> None:
-    response = (
-        "<think>\nSome internal reasoning here.\nMultiple lines.\n</think>\n"
-        "who_daemon_is: A curious mind.\n"
-    )
-    ds = _parse_seeding_response(response)
-    assert "curious" in ds.who_daemon_is
-    assert "<think>" not in ds.who_daemon_is
-
-
-def test_parse_strips_thinking_block_and_code_fence() -> None:
-    response = (
-        "<think>\nReasoning about format.\n</think>\n"
-        "```yaml\n"
-        "who_daemon_is: A structured mind.\n"
-        "```"
-    )
+def test_parse_strips_code_fence() -> None:
+    response = "```yaml\nwho_daemon_is: A structured mind.\n```"
     ds = _parse_seeding_response(response)
     assert "structured" in ds.who_daemon_is
-    assert "<think>" not in ds.who_daemon_is
 
 
 def test_parse_strips_role_label_before_yaml() -> None:
-    """Model emits bare 'assistant' role label before the YAML block."""
+    """Bare role label before YAML is skipped by the yaml_start search."""
     response = (
-        "<think>\nSome reasoning.\n</think>\n"
         "assistant\n"
         "\n"
         "who_daemon_is: A mind that arrived without preamble.\n"

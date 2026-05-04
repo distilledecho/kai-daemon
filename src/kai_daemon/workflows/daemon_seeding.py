@@ -129,8 +129,7 @@ def _parse_seeding_response(raw: str) -> DaemonSelf:
     import yaml  # local import to keep module-level imports lean
 
     try:
-        # Strip any <think>...</think> block emitted by reasoning models.
-        text = re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL).strip()
+        text = raw.strip()
 
         # Strip any markdown code fences
         if text.startswith("```"):

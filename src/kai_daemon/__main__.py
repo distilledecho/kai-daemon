@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import signal
 import threading
 from argparse import ArgumentParser
@@ -35,6 +36,42 @@ _inference_fn: Callable[[str], str] | None = None
 _inference_lock: threading.Lock = threading.Lock()
 
 
+# ---------------------------------------------------------------------------
+# Output normalizers — one per model family, selected at construction time
+# ---------------------------------------------------------------------------
+
+
+def _strip_model_artifacts(text: str) -> str:
+    """Strip common model output artifacts present in all chat model families.
+
+    Removes <think>...</think> blocks and bare role-label lines ("assistant",
+    "user", "system") that some models emit before their actual output.
+    """
+    text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
+    text = re.sub(r"(?m)^\s*(assistant|user|system)\s*\n", "", text)
+    return text.strip()
+
+
+def _strip_generic_artifacts(text: str) -> str:
+    """Fallback normalizer — strips leading/trailing whitespace only."""
+    return text.strip()
+
+
+_NORMALIZERS: list[tuple[str, Callable[[str], str]]] = [
+    ("qwen3", _strip_model_artifacts),
+    ("qwen2", _strip_model_artifacts),  # same artifact family
+]
+
+
+def _get_normalizer(model_name: str) -> Callable[[str], str]:
+    """Return the normalizer for *model_name* via case-insensitive substring match."""
+    lower = model_name.lower()
+    for prefix, fn in _NORMALIZERS:
+        if prefix in lower:
+            return fn
+    return _strip_generic_artifacts
+
+
 def _make_inference_fn() -> Callable[[str], str]:
     """Build the real inference closure backed by mlx-kv-client.
 
@@ -55,6 +92,9 @@ def _make_inference_fn() -> Callable[[str], str]:
         status.model,
         local_files_only=True,
     )
+
+    normalizer = _get_normalizer(status.model)
+    logger.info("inference: output normalizer=%s", normalizer.__name__)
 
     def _inference(prompt: str) -> str:
         if "\n\nUser: " in prompt and "\n\nResponse:" in prompt:
@@ -81,7 +121,7 @@ def _make_inference_fn() -> Callable[[str], str]:
         output_tokens: list[Any] = []
         for token in kv_client.generate([tokenizer.eos_token_id], _INFERENCE_CACHE_ID):
             output_tokens.append(token)
-        return str(tokenizer.decode(output_tokens, skip_special_tokens=True))
+        return normalizer(tokenizer.decode(output_tokens, skip_special_tokens=True))
 
     _inference._kv_client = kv_client  # type: ignore[attr-defined]  # noqa: SLF001
     return _inference

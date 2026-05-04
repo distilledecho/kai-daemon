@@ -61,6 +61,59 @@ def _make_inference_mocks(
 
 
 # ---------------------------------------------------------------------------
+# Normalizer registry tests
+# ---------------------------------------------------------------------------
+
+
+def test_get_normalizer_qwen3_family() -> None:
+    import kai_daemon.__main__ as m
+
+    fn = m._get_normalizer("mlx-community/Qwen3.5-35B-A3B-4bit")
+    assert fn is m._strip_model_artifacts
+
+
+def test_get_normalizer_qwen2_family() -> None:
+    import kai_daemon.__main__ as m
+
+    fn = m._get_normalizer("Qwen2-7B-Instruct")
+    assert fn is m._strip_model_artifacts
+
+
+def test_get_normalizer_unknown_returns_generic() -> None:
+    import kai_daemon.__main__ as m
+
+    fn = m._get_normalizer("some-unknown-model-v1")
+    assert fn is m._strip_generic_artifacts
+
+
+def test_strip_model_artifacts_role_label_then_think_then_response() -> None:
+    import kai_daemon.__main__ as m
+
+    raw = "\nassistant\n<think>\n\n</think>\n\nActual response"
+    assert m._strip_model_artifacts(raw) == "Actual response"
+
+
+def test_strip_model_artifacts_multiline_think_block() -> None:
+    import kai_daemon.__main__ as m
+
+    raw = "<think>multi\nline\nthinking</think>\n\nActual response"
+    assert m._strip_model_artifacts(raw) == "Actual response"
+
+
+def test_strip_model_artifacts_clean_input_is_noop() -> None:
+    import kai_daemon.__main__ as m
+
+    raw = "Actual response"
+    assert m._strip_model_artifacts(raw) == "Actual response"
+
+
+def test_strip_generic_artifacts_strips_whitespace() -> None:
+    import kai_daemon.__main__ as m
+
+    assert m._strip_generic_artifacts("  hello\n") == "hello"
+
+
+# ---------------------------------------------------------------------------
 # Test 1 — tokenizer construction contract
 # ---------------------------------------------------------------------------
 
