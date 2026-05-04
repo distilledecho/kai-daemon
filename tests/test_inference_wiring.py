@@ -138,6 +138,13 @@ def test_strip_model_artifacts_role_label_at_end_no_trailing_newline() -> None:
     assert m._strip_model_artifacts(raw) == "Some response text"
 
 
+def test_strip_model_artifacts_role_word_mid_line_is_preserved() -> None:
+    import kai_daemon.__main__ as m
+
+    raw = "system is broken\n\nHello"
+    assert m._strip_model_artifacts(raw) == "system is broken\n\nHello"
+
+
 def test_strip_generic_artifacts_strips_whitespace() -> None:
     import kai_daemon.__main__ as m
 

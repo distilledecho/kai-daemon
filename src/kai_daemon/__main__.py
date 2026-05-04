@@ -52,7 +52,7 @@ def _strip_model_artifacts(text: str) -> str:
     "user", "system") that some models emit before their actual output.
     """
     text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
-    text = re.sub(r"(?m)^\s*(assistant|user|system)\s*\n?", "", text)
+    text = re.sub(r"(?m)^\s*(assistant|user|system)\s*$\n?", "", text)
     return text.strip()
 
 
@@ -121,6 +121,9 @@ def _make_inference_fn() -> Callable[[str], str]:
     def _inference(prompt: str) -> str:
         if _PROMPT_USER_MARKER in prompt and _PROMPT_RESPONSE_MARKER in prompt:
             # Shape 1: personal_assistant format — split into system + user turns.
+            # Assumption: user message does not contain _PROMPT_RESPONSE_MARKER.
+            # If it does, the message will be silently truncated at that string.
+            # This is acceptable for normal conversational input.
             parts = prompt.split(_PROMPT_USER_MARKER, 1)
             system_text = parts[0]
             user_text = parts[1].split(_PROMPT_RESPONSE_MARKER, 1)[0]
@@ -154,6 +157,9 @@ def _make_inference_fn() -> Callable[[str], str]:
             output_tokens.append(token)
         return normalizer(tokenizer.decode(output_tokens, skip_special_tokens=True))
 
+    # _kv_client is read by _make_seeding_fn to evict the cache after seeding.
+    # If this closure is refactored, ensure that attribute remains accessible
+    # or the post-seeding evict silently becomes a no-op.
     _inference._kv_client = kv_client  # type: ignore[attr-defined]  # noqa: SLF001
     return _inference
 
