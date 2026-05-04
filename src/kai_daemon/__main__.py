@@ -42,13 +42,19 @@ def _make_inference_fn() -> Callable[[str], str]:
     do not cause import errors in the test environment (mlx only runs on M1).
     """
     from mlx_kv_client import MlxKvClient  # type: ignore[import-untyped]
-    from mlx_lm import load as mlx_load  # type: ignore[import-untyped]
+    from transformers import AutoTokenizer  # type: ignore[import-untyped]
 
-    # Annotate explicitly as Any so pyright doesn't propagate Unknown downstream.
     kv_client: Any = cast(Any, MlxKvClient(_KV_SOCKET_PATH))
     status: Any = kv_client.status()
     logger.info("inference: connected — model=%s", status.model)
-    _, tokenizer = cast(tuple[Any, Any], mlx_load(status.model, tokenizer_only=True))
+
+    # Reads from ~/.cache/huggingface/hub — no network access.
+    # Raises OSError immediately if the cache is missing.
+    # cast(Any, ...) keeps pyright strict-mode clean despite untyped import.
+    tokenizer: Any = cast(Any, AutoTokenizer).from_pretrained(
+        status.model,
+        local_files_only=True,
+    )
 
     def _inference(prompt: str) -> str:
         tokens: Any = tokenizer.encode(prompt)
@@ -56,7 +62,7 @@ def _make_inference_fn() -> Callable[[str], str]:
         output_tokens: list[Any] = []
         for token in kv_client.generate([tokenizer.eos_token_id], _INFERENCE_CACHE_ID):
             output_tokens.append(token)
-        return str(tokenizer.decode(output_tokens))
+        return str(tokenizer.decode(output_tokens, skip_special_tokens=True))
 
     _inference._kv_client = kv_client  # type: ignore[attr-defined]  # noqa: SLF001
     return _inference
@@ -152,10 +158,6 @@ def _build_engine(
 
     engine = WorkflowEngine(run_logger=run_logger)
 
-    # ------------------------------------------------------------------
-    # Priority 0 — Initialization
-    # ------------------------------------------------------------------
-
     engine.register(
         WorkflowSpec(
             name="daemon_seeding",
@@ -181,10 +183,6 @@ def _build_engine(
         )
     )
 
-    # ------------------------------------------------------------------
-    # Priority 9 — Deep background (inner life generation)
-    # ------------------------------------------------------------------
-
     engine.register(
         WorkflowSpec(
             name="daemon_inner_thought_generation",
@@ -197,10 +195,6 @@ def _build_engine(
             allowed_tools=_t("daemon_inner_thought_generation"),
         )
     )
-
-    # ------------------------------------------------------------------
-    # Priority 8 — Background chained (inner life pipeline)
-    # ------------------------------------------------------------------
 
     engine.register(
         WorkflowSpec(
@@ -239,10 +233,6 @@ def _build_engine(
         )
     )
 
-    # ------------------------------------------------------------------
-    # Priority 5 — Nightly knowledge
-    # ------------------------------------------------------------------
-
     engine.register(
         WorkflowSpec(
             name="contradiction_detection",
@@ -254,10 +244,6 @@ def _build_engine(
             allowed_tools=_t("contradiction_detection"),
         )
     )
-
-    # ------------------------------------------------------------------
-    # Priority 6 — Nightly maintenance
-    # ------------------------------------------------------------------
 
     for _wf_name, _wf_hour in [
         ("open_loop_review", 22),
@@ -276,10 +262,6 @@ def _build_engine(
                 allowed_tools=_t(_wf_name),
             )
         )
-
-    # ------------------------------------------------------------------
-    # Priority 7 — Late night
-    # ------------------------------------------------------------------
 
     engine.register(
         WorkflowSpec(
@@ -355,6 +337,12 @@ def main(args: Sequence[str] | None = None) -> None:
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
         help="Logging level (default: INFO)",
     )
+    parser.add_argument(
+        "--force-reseed",
+        action="store_true",
+        default=False,
+        help="Delete daemon_self.yaml before starting so daemon_seeding re-runs",
+    )
     parsed = parser.parse_args(args)
 
     logging.basicConfig(
@@ -365,10 +353,8 @@ def main(args: Sequence[str] | None = None) -> None:
 
     logger.info("kai-daemon %s starting", __version__)
 
-    # 1. Initialise daemon-local state directories
     _init_state()
 
-    # 2. Start the localhost action API in a daemon thread
     run_logger = WorkflowRunLogger()
     action_server = ActionServer(port=parsed.port)
     api_thread = threading.Thread(
@@ -380,8 +366,6 @@ def main(args: Sequence[str] | None = None) -> None:
     host, port = action_server.address
     logger.info("action-api: ready at http://%s:%d", host, port)
 
-    # 3. Start the conversation HTTP server in a daemon thread.
-    #    Inference is initialised lazily on the first request via _get_inference_fn.
     from .conversation_server import run_conversation_server
 
     def _conv_inference(prompt: str) -> str:
@@ -400,16 +384,20 @@ def main(args: Sequence[str] | None = None) -> None:
     conv_thread.start()
     logger.info("conv-server: starting at http://0.0.0.0:%d", parsed.conv_port)
 
-    # 4. Build and start the workflow engine.
-    #    Load workflows.yaml for the SDK permission matrix, then
-    #    start() evaluates startup_conditions (daemon_seeding → onboarding)
-    #    and schedules background cron workflows.
+    if parsed.force_reseed:
+        from .state._paths import daemon_state_dir
+
+        _daemon_self_path = daemon_state_dir() / "daemon_self.yaml"
+        logger.warning("--force-reseed: daemon_seeding will be forced to re-run")
+        if _daemon_self_path.exists():
+            _daemon_self_path.unlink()
+            logger.warning("--force-reseed: deleted %s", _daemon_self_path)
+
     _workflows_yaml = Path(__file__).parents[2] / "workflows.yaml"
     _allowed_tools = _load_allowed_tools(_workflows_yaml)
     engine = _build_engine(run_logger, allowed_tools=_allowed_tools)
     engine.start()
 
-    # 5. Block until SIGINT / SIGTERM
     stop = threading.Event()
 
     def _handle_signal(signum: int, _frame: object) -> None:

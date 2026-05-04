@@ -13,6 +13,7 @@ Prerequisite for: onboarding
 from __future__ import annotations
 
 import logging
+import re
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -128,8 +129,10 @@ def _parse_seeding_response(raw: str) -> DaemonSelf:
     import yaml  # local import to keep module-level imports lean
 
     try:
+        # Strip any <think>...</think> block emitted by reasoning models.
+        text = re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL).strip()
+
         # Strip any markdown code fences
-        text = raw.strip()
         if text.startswith("```"):
             lines = text.splitlines()
             # Remove opening and closing fence lines
