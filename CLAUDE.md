@@ -144,6 +144,8 @@ POST /actions/contradiction/{id}/resolve
 POST /actions/contradiction/{id}/dismiss
 POST /actions/borderline/{id}/promote
 POST /actions/borderline/{id}/discard
+GET  /status/kv
+     Proxy mlx-kv-server status for kai-devtools. Read-only.
 ```
 
 This API is localhost-only. It is never exposed on the network.
@@ -173,8 +175,6 @@ src/kai_daemon/
   tools/                       # Kai SDK tool implementations
   workflows/                   # all 29 workflow implementations
 
-prompts/                       # prompt files, one per workflow/tool
-
 user.yaml                      # user config — name, preferences, thresholds
 daemon-memory-server.yaml      # connection, embedding model, retrieval config, contradiction thresholds
 ```
@@ -200,44 +200,44 @@ Full `workflows.yaml` section for the complete registry.
 ## Stage acceptance criteria
 
 ### Stage 1
-- [ ] Scratch space type lifecycle rules enforced; `epistemic_origin` immutable
-- [ ] DAEMON_SELF and DAEMON_RELATIONAL versioning correct; token budget warnings implemented
-- [ ] `holding_write` validation rule with all three test cases
-- [ ] Thread lifecycle state transitions enforced; `time_gap_quality` null at write time
-- [ ] Observability hooks write on every workflow execution; `memory_server_available` correct
-- [ ] No personal names anywhere in implementation
+- [x] Scratch space type lifecycle rules enforced; `epistemic_origin` immutable
+- [x] DAEMON_SELF and DAEMON_RELATIONAL versioning correct; token budget warnings implemented
+- [x] `holding_write` validation rule with all three test cases
+- [x] Thread lifecycle state transitions enforced; `time_gap_quality` null at write time
+- [x] Observability hooks write on every workflow execution; `memory_server_available` correct
+- [x] No personal names anywhere in implementation
 
 ### Stage 2
-- [ ] Both external tools contain no user data paths (automated test)
-- [ ] PROMPT_F fires on 14-day threshold; A–E rotation configurable
-- [ ] Bypass valve at configurable rate (default 12%)
-- [ ] Four-way routing in `daemon_integration`; fascination lifecycle check at `development_count >= 3`
-- [ ] Pollination deduplication; high-significance signal with 24h TTL
-- [ ] 7-day ceiling enforced before push evaluation prompt runs
-- [ ] BORDERLINE pool: review surface in kai-devtools; promote/discard actions work; 30-day auto-expiry enforced
+- [x] Both external tools contain no user data paths (automated test)
+- [x] PROMPT_F fires on 14-day threshold; A–E rotation configurable
+- [x] Bypass valve at configurable rate (default 12%)
+- [x] Four-way routing in `daemon_integration`; fascination lifecycle check at `development_count >= 3`
+- [x] Pollination deduplication; high-significance signal with 24h TTL
+- [x] 7-day ceiling enforced before push evaluation prompt runs
+- [x] BORDERLINE pool: review surface in kai-devtools; promote/discard actions work; 30-day auto-expiry enforced
 
 ### Stage 3
-- [ ] Preemption: `suspend` checkpoints/resumes; `restart` terminates/restarts; no blocking
-- [ ] `episodic_flush`: `suspend` preemption; checkpoint after step 3; working memory gate
-- [ ] `commissioned_inquiry`: abandonment preserves findings; results surfaced via push not dump
-- [ ] Contradiction surfacing through discharge, not separate workflow; register gate excludes `urgent`
-- [ ] Localhost action API implemented; contradiction and BORDERLINE actions work end-to-end
-- [ ] kai-devtools panel built with all observability surfaces
+- [x] Preemption: `suspend` checkpoints/resumes; `restart` terminates/restarts; no blocking
+- [x] `episodic_flush`: `suspend` preemption; checkpoint after step 3; working memory gate
+- [x] `commissioned_inquiry`: abandonment preserves findings; results surfaced via push not dump
+- [x] Contradiction surfacing through discharge, not separate workflow; register gate excludes `urgent`
+- [x] Localhost action API implemented; contradiction and BORDERLINE actions work end-to-end
+- [x] kai-devtools panel built with all observability surfaces
 
 ### Stage 3.5
-- [ ] Every primitive call logged to `inference_calls.jsonl` with all fields
-- [ ] Kai SDK initialised with permission context from `workflows.yaml` at engine startup
-- [ ] `ToolPermissionError` raised and logged when a tool is called outside permitted context
-- [ ] All tool calls logged to `tool_calls.jsonl` with workflow_id, tool, inputs, outcome
+- [x] Every primitive call logged to `inference_calls.jsonl` with all fields
+- [x] Kai SDK initialised with permission context from `workflows.yaml` at engine startup
+- [x] `ToolPermissionError` raised and logged when a tool is called outside permitted context
+- [x] All tool calls logged to `tool_calls.jsonl` with workflow_id, tool, inputs, outcome
 
 ### Stage 4
-- [ ] Thread stack: `state` derived from rank each turn, never stored independently; stack capped at 2; floating threads separate list, no eviction
-- [ ] All five salience constants and `drop_threshold` configurable in `user.yaml` under `thread_stack:`
-- [ ] Retrieval: graceful degradation when memory server unavailable (empty results, no error)
-- [ ] Retrieval: when a referenced artifact has `chunk_status: pending`, acknowledge naturally ("still reading through it") rather than returning empty results silently
-- [ ] Discharge: both gates required; contradiction record hydrated via `contradiction_id`; at most one item per turn
-- [ ] Register inference: correction pathway emits new message, preserves prior response
-- [ ] Session end: snapshot before workflows; working memory not cleared until `episodic_flush` confirms
+- [x] Thread stack: `state` derived from rank each turn, never stored independently; stack capped at 2; floating threads separate list, no eviction
+- [x] All five salience constants and `drop_threshold` configurable in `user.yaml` under `thread_stack:`
+- [x] Retrieval: graceful degradation when memory server unavailable (empty results, no error)
+- [x] Retrieval: when a referenced artifact has `chunk_status: pending`, acknowledge naturally ("still reading through it") rather than returning empty results silently
+- [x] Discharge: both gates required; contradiction record hydrated via `contradiction_id`; at most one item per turn
+- [x] Register inference: correction pathway emits new message, preserves prior response
+- [x] Session end: snapshot before workflows; working memory not cleared until `episodic_flush` confirms
 
 ## GitHub issue hygiene
 
