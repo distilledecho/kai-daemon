@@ -12,13 +12,31 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
 ]
 description = "The daemon — persistent memory, background workflows, and inner life pipeline"
-dependencies = ["chromadb>=0.5", "fastapi>=0.100", "pydantic>=2.0", "pyyaml>=6.0", "tiktoken>=0.7", "uvicorn>=0.20"]
+dependencies = [
+    "chromadb>=0.5",
+    "fastapi>=0.100",
+    "mlx-kv-client",
+    "pydantic>=2.0",
+    "pyyaml>=6.0",
+    "tiktoken>=0.7",
+    "uvicorn>=0.20",
+]
 dynamic = ["version"]
 license.file = "LICENSE"
 readme = "README.md"
 requires-python = ">=3.11"
 
 [dependency-groups]
+# Apple Silicon inference dependencies — not installed in devcontainer.
+# mlx-kv-client is installed as an editable local package:
+#   uv add --editable ../mlx-kv-client
+# Do not add mlx-lm or mlx-kv-client to core dependencies.
+# Do not add `transformers` to any dependency group — it arrives
+# transitively and must not be declared.
+inference = [
+    "mlx-lm>=0.22",
+]
+
 dev = [
     "anyio>=3.0",
     "copier",
@@ -176,3 +194,6 @@ lint.select = [
 # See https://github.com/DiamondLightSource/python-copier-template/issues/154
 # Remove this line to forbid private member access in tests
 "tests/**/*" = ["SLF001"]
+
+[tool.uv.sources]
+mlx-kv-client = { path = "../mlx-kv-client", editable = true }

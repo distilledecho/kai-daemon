@@ -125,11 +125,15 @@ def _parse_seeding_response(raw: str) -> DaemonSelf:
     Falls back to a minimal DaemonSelf if parsing fails — seeding must
     always produce a result, even if the model response is malformed.
     """
+    import re  # local import
+
     import yaml  # local import to keep module-level imports lean
 
     try:
+        # Strip any <think>...</think> block emitted by reasoning models.
+        text = re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL).strip()
+
         # Strip any markdown code fences
-        text = raw.strip()
         if text.startswith("```"):
             lines = text.splitlines()
             # Remove opening and closing fence lines
