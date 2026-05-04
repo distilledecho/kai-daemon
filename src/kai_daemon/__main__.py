@@ -42,15 +42,19 @@ def _make_inference_fn() -> Callable[[str], str]:
     do not cause import errors in the test environment (mlx only runs on M1).
     """
     from mlx_kv_client import MlxKvClient  # type: ignore[import-untyped]
-    from mlx_lm import load as mlx_load  # type: ignore[import-untyped]
+    from transformers import AutoTokenizer  # type: ignore[import-untyped]
 
     kv_client: Any = cast(Any, MlxKvClient(_KV_SOCKET_PATH))
     status: Any = kv_client.status()
     logger.info("inference: connected — model=%s", status.model)
 
-    # Load tokenizer from locally cached MLX model — no network access.
-    # Discard model weights (_); they stay on the mlx-kv-server side.
-    _, tokenizer = cast(tuple[Any, Any], mlx_load(status.model))
+    # Reads from ~/.cache/huggingface/hub — no network access.
+    # Raises OSError immediately if the cache is missing.
+    # cast(Any, ...) keeps pyright strict-mode clean despite untyped import.
+    tokenizer: Any = cast(Any, AutoTokenizer).from_pretrained(
+        status.model,
+        local_files_only=True,
+    )
 
     def _inference(prompt: str) -> str:
         tokens: Any = tokenizer.encode(prompt)

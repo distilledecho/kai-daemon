@@ -13,6 +13,7 @@ Prerequisite for: onboarding
 from __future__ import annotations
 
 import logging
+import re
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -125,8 +126,6 @@ def _parse_seeding_response(raw: str) -> DaemonSelf:
     Falls back to a minimal DaemonSelf if parsing fails — seeding must
     always produce a result, even if the model response is malformed.
     """
-    import re  # local import
-
     import yaml  # local import to keep module-level imports lean
 
     try:

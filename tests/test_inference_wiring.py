@@ -1,13 +1,14 @@
 """Tests for _make_inference_fn, _get_inference_fn, and _shutdown_inference.
 
-All external packages (mlx_kv_client, mlx_lm) are mocked via sys.modules so that
-tests run without Apple Silicon hardware or network access.
+Both mlx_kv_client and transformers are mocked via sys.modules so that tests
+run without Apple Silicon hardware, model weights, or network access.
 """
 
 from __future__ import annotations
 
 import sys
 from collections.abc import Generator
+from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -32,16 +33,31 @@ def reset_inference_singleton() -> Generator[None, None, None]:
 # ---------------------------------------------------------------------------
 
 
-def _patched_modules(
-    mock_kv_client: MagicMock,
-    mock_load: MagicMock,
-) -> dict[str, Any]:
-    """Build a sys.modules patch dict with mock mlx_kv_client and mlx_lm."""
+def _make_inference_mocks(
+    mock_tokenizer: MagicMock | None = None,
+) -> tuple[MagicMock, MagicMock, dict[str, Any]]:
+    """Return (mock_kv_client, mock_tokenizer, sys_modules_patch).
+
+    Injects mock mlx_kv_client and transformers modules into sys.modules so
+    that _make_inference_fn() can be called without real packages installed.
+    """
+    mock_kv_client = MagicMock()
+    if mock_tokenizer is None:
+        mock_tokenizer = MagicMock()
+
     mlx_kv_mod = MagicMock()
     mlx_kv_mod.MlxKvClient = MagicMock(return_value=mock_kv_client)
-    mlx_lm_mod = MagicMock()
-    mlx_lm_mod.load = mock_load
-    return {"mlx_kv_client": mlx_kv_mod, "mlx_lm": mlx_lm_mod}
+
+    transformers_mod = MagicMock()
+    transformers_mod.AutoTokenizer.from_pretrained = MagicMock(
+        return_value=mock_tokenizer
+    )
+
+    mods: dict[str, Any] = {
+        "mlx_kv_client": mlx_kv_mod,
+        "transformers": transformers_mod,
+    }
+    return mock_kv_client, mock_tokenizer, mods
 
 
 # ---------------------------------------------------------------------------
@@ -52,17 +68,18 @@ def _patched_modules(
 def test_tokenizer_construction_contract() -> None:
     import kai_daemon.__main__ as m
 
-    mock_kv_client = MagicMock()
-    mock_load = MagicMock(return_value=(MagicMock(), MagicMock()))
-
-    mods = _patched_modules(mock_kv_client, mock_load)
+    mock_kv_client, _, mods = _make_inference_mocks()
 
     with patch.dict(sys.modules, mods):
         result = m._make_inference_fn()
 
     mods["mlx_kv_client"].MlxKvClient.assert_called_once_with(m._KV_SOCKET_PATH)
     mock_kv_client.status.assert_called_once_with()
-    mock_load.assert_called_once_with(mock_kv_client.status.return_value.model)
+    status = mock_kv_client.status.return_value
+    mods["transformers"].AutoTokenizer.from_pretrained.assert_called_once_with(
+        status.model,
+        local_files_only=True,
+    )
     assert callable(result)
 
 
@@ -81,8 +98,8 @@ def test_inference_closure_call_sequence() -> None:
     mock_tokenizer.decode.return_value = "hello"
     mock_kv_client.generate.return_value = iter([4, 5])
 
-    mock_load = MagicMock(return_value=(MagicMock(), mock_tokenizer))
-    mods = _patched_modules(mock_kv_client, mock_load)
+    _, _, mods = _make_inference_mocks(mock_tokenizer)
+    mods["mlx_kv_client"].MlxKvClient = MagicMock(return_value=mock_kv_client)
 
     with patch.dict(sys.modules, mods):
         inference_fn = m._make_inference_fn()
@@ -165,3 +182,37 @@ def test_shutdown_noop_when_not_initialised() -> None:
 
     assert m._inference_fn is None
     m._shutdown_inference()  # must not raise
+
+
+# ---------------------------------------------------------------------------
+# Test 7 — --force-reseed deletes daemon_self.yaml
+# ---------------------------------------------------------------------------
+
+
+def test_force_reseed_deletes_daemon_self(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """--force-reseed deletes daemon_self.yaml before the engine starts."""
+    monkeypatch.setenv("KAI_DATA_DIR", str(tmp_path))
+
+    import kai_daemon.__main__ as m
+
+    # Pre-create daemon_self.yaml to simulate an existing seeding run.
+    state_dir = tmp_path / "daemon_state"
+    state_dir.mkdir(parents=True)
+    daemon_self = state_dir / "daemon_self.yaml"
+    daemon_self.write_text("version: 1\n")
+
+    mock_server = MagicMock()
+    mock_server.address = ("127.0.0.1", 9999)
+
+    with (
+        patch("kai_daemon.__main__.WorkflowRunLogger"),
+        patch("kai_daemon.__main__.ActionServer", return_value=mock_server),
+        patch("kai_daemon.__main__._build_engine"),
+        patch("kai_daemon.conversation_server.run_conversation_server"),
+        patch("threading.Event.wait"),
+    ):
+        m.main(["--force-reseed", "--log-level", "WARNING"])
+
+    assert not daemon_self.exists()
