@@ -107,6 +107,13 @@ def test_strip_model_artifacts_clean_input_is_noop() -> None:
     assert m._strip_model_artifacts(raw) == "Actual response"
 
 
+def test_strip_model_artifacts_role_label_at_end_no_trailing_newline() -> None:
+    import kai_daemon.__main__ as m
+
+    raw = "Some response text\nassistant"
+    assert m._strip_model_artifacts(raw) == "Some response text"
+
+
 def test_strip_generic_artifacts_strips_whitespace() -> None:
     import kai_daemon.__main__ as m
 

@@ -18,6 +18,10 @@ from .api import DEFAULT_PORT, ActionServer
 from .engine import TriggerType, WorkflowEngine, WorkflowSpec
 from .state.observability import WorkflowRunLogger
 from .workflows.onboarding import run_onboarding
+from .workflows.personal_assistant import (
+    _PROMPT_RESPONSE_MARKER,
+    _PROMPT_USER_MARKER,
+)
 from .workflows.preemption import PreemptionMode
 
 __all__ = ["main"]
@@ -48,7 +52,7 @@ def _strip_model_artifacts(text: str) -> str:
     "user", "system") that some models emit before their actual output.
     """
     text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
-    text = re.sub(r"(?m)^\s*(assistant|user|system)\s*\n", "", text)
+    text = re.sub(r"(?m)^\s*(assistant|user|system)\s*\n?", "", text)
     return text.strip()
 
 
@@ -97,11 +101,11 @@ def _make_inference_fn() -> Callable[[str], str]:
     logger.info("inference: output normalizer=%s", normalizer.__name__)
 
     def _inference(prompt: str) -> str:
-        if "\n\nUser: " in prompt and "\n\nResponse:" in prompt:
+        if _PROMPT_USER_MARKER in prompt and _PROMPT_RESPONSE_MARKER in prompt:
             # Shape 1: personal_assistant format — split into system + user turns.
-            parts = prompt.split("\n\nUser: ", 1)
+            parts = prompt.split(_PROMPT_USER_MARKER, 1)
             system_text = parts[0]
-            user_text = parts[1].split("\n\nResponse:", 1)[0]
+            user_text = parts[1].split(_PROMPT_RESPONSE_MARKER, 1)[0]
             messages: list[dict[str, str]] = [
                 {"role": "system", "content": system_text},
                 {"role": "user", "content": user_text},

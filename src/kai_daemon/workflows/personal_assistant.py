@@ -71,6 +71,12 @@ logger = logging.getLogger(__name__)
 # Constants
 # ---------------------------------------------------------------------------
 
+# Prompt format shared with __main__.py's inference-shape detector.
+# Both files must stay in sync: __main__._inference splits on these markers
+# to reconstruct the system/user messages for apply_chat_template.
+_PROMPT_USER_MARKER = "\n\nUser: "
+_PROMPT_RESPONSE_MARKER = "\n\nResponse:"
+
 _SUBTEXT_PRIMING = (
     "Before responding, consider: is this the thing they are actually"
     " thinking about, or is it adjacent to it? You know this person."
@@ -787,7 +793,9 @@ class PersonalAssistant:
             self._thread_store,
             retrieval_ctx,
         )
-        full_prompt = f"{system_prompt}\n\nUser: {message}\n\nResponse:"
+        full_prompt = (
+            f"{system_prompt}{_PROMPT_USER_MARKER}{message}{_PROMPT_RESPONSE_MARKER}"
+        )
         response = self._inference_fn(full_prompt)
 
         # ------------------------------------------------------------------

@@ -138,9 +138,11 @@ def _parse_seeding_response(raw: str) -> DaemonSelf:
             inner = [line for line in lines[1:] if not line.strip().startswith("```")]
             text = "\n".join(inner)
 
-        # Some models emit a role label (e.g. "assistant") before the YAML.
-        # Find the first line that looks like a YAML key and slice from there.
-        yaml_start = re.search(r"^[\w][\w_]*\s*:", text, flags=re.MULTILINE)
+        # Defense-in-depth: _strip_model_artifacts in __main__.py already strips
+        # role labels at inference time, but this scan guards against any path
+        # where seeding receives output that bypassed that layer. Neither layer
+        # should be removed assuming the other covers it.
+        yaml_start = re.search(r"^\w+\s*:", text, flags=re.MULTILINE)
         if yaml_start:
             text = text[yaml_start.start() :]
 
