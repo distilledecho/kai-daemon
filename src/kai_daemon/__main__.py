@@ -161,6 +161,22 @@ def _make_seeding_fn() -> Callable[[], None]:
 
     def _fn() -> None:
         run_daemon_seeding(inference_fn=_get_inference_fn())
+        # Evict KV cache after seeding so conversation starts clean.
+        # Without this, conversation prefill extends the seeding context
+        # and the model echoes the user message as a continuation.
+        fn = _inference_fn
+        if fn is not None:
+            kv_client = getattr(fn, "_kv_client", None)
+            if kv_client is not None:
+                try:
+                    kv_client.evict(_INFERENCE_CACHE_ID)
+                    logger.info(
+                        "inference: seeding cache evicted — ready for conversation"
+                    )
+                except Exception:
+                    logger.warning(
+                        "inference: failed to evict seeding cache", exc_info=True
+                    )
 
     return _fn
 

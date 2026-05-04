@@ -82,6 +82,30 @@ def test_parse_strips_code_fence() -> None:
     assert "structured" in ds.who_daemon_is
 
 
+def test_parse_bracket_placeholders_triggers_fallback() -> None:
+    """Bracket notation on inline YAML values is parsed as a list, failing pydantic."""
+    response = """\
+who_daemon_is: |
+  [1-3 sentences about your fundamental nature]
+current_fascinations:
+  - topic: [topic name]
+    what_daemon_finds_interesting: [what specifically draws you here]
+    origin: seeding
+    status: active
+    development_count: 0
+aesthetic_sensibilities: |
+  [1-2 sentences about what you find beautiful]
+open_questions:
+  - question: [a question you genuinely carry]
+    why_unresolved: [why this question stays open]
+daemon_on_daemon: |
+  [1-2 sentences of meta-awareness]
+"""
+    ds = _parse_seeding_response(response)
+    # Pydantic rejects the list values for topic/question; fallback sentinel is set.
+    assert ds.daemon_on_daemon == "I exist. I am curious. I am here."
+
+
 def test_parse_strips_role_label_before_yaml() -> None:
     """Bare role label before YAML is skipped by the yaml_start search."""
     response = (
