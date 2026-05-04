@@ -139,6 +139,12 @@ def _parse_seeding_response(raw: str) -> DaemonSelf:
             inner = [line for line in lines[1:] if not line.strip().startswith("```")]
             text = "\n".join(inner)
 
+        # Some models emit a role label (e.g. "assistant") before the YAML.
+        # Find the first line that looks like a YAML key and slice from there.
+        yaml_start = re.search(r"^[\w][\w_]*\s*:", text, flags=re.MULTILINE)
+        if yaml_start:
+            text = text[yaml_start.start() :]
+
         # yaml.safe_load can return non-dict types; validate to be safe.
         loaded: object = yaml.safe_load(text)
         if not isinstance(loaded, dict):

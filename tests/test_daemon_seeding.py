@@ -98,6 +98,20 @@ def test_parse_strips_thinking_block_and_code_fence() -> None:
     assert "<think>" not in ds.who_daemon_is
 
 
+def test_parse_strips_role_label_before_yaml() -> None:
+    """Model emits bare 'assistant' role label before the YAML block."""
+    response = (
+        "<think>\nSome reasoning.\n</think>\n"
+        "assistant\n"
+        "\n"
+        "who_daemon_is: A mind that arrived without preamble.\n"
+        "daemon_on_daemon: I noticed I prefixed myself.\n"
+    )
+    ds = _parse_seeding_response(response)
+    assert "arrived without preamble" in ds.who_daemon_is
+    assert isinstance(ds, DaemonSelf)
+
+
 # ---------------------------------------------------------------------------
 # run_daemon_seeding
 # ---------------------------------------------------------------------------
