@@ -65,6 +65,30 @@ def _make_inference_mocks(
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# Chat template kwargs registry tests
+# ---------------------------------------------------------------------------
+
+
+def test_get_chat_template_kwargs_qwen3() -> None:
+    import kai_daemon.__main__ as m
+
+    kwargs = m._get_chat_template_kwargs("mlx-community/Qwen3.5-35B-A3B-4bit")
+    assert kwargs == {"enable_thinking": False}
+
+
+def test_get_chat_template_kwargs_unknown_returns_empty() -> None:
+    import kai_daemon.__main__ as m
+
+    kwargs = m._get_chat_template_kwargs("some-unknown-model-v1")
+    assert kwargs == {}
+
+
+# ---------------------------------------------------------------------------
+# Normalizer registry tests
+# ---------------------------------------------------------------------------
+
+
 def test_get_normalizer_qwen3_family() -> None:
     import kai_daemon.__main__ as m
 

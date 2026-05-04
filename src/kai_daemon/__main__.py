@@ -76,6 +76,21 @@ def _get_normalizer(model_name: str) -> Callable[[str], str]:
     return _strip_generic_artifacts
 
 
+_CHAT_TEMPLATE_KWARGS: list[tuple[str, dict[str, Any]]] = [
+    ("qwen3", {"enable_thinking": False}),
+    ("qwen2", {}),
+]
+
+
+def _get_chat_template_kwargs(model_name: str) -> dict[str, Any]:
+    """Return apply_chat_template kwargs for *model_name*, matched by substring."""
+    lower = model_name.lower()
+    for pattern, kwargs in _CHAT_TEMPLATE_KWARGS:
+        if pattern in lower:
+            return kwargs
+    return {}
+
+
 def _make_inference_fn() -> Callable[[str], str]:
     """Build the real inference closure backed by mlx-kv-client.
 
@@ -100,6 +115,9 @@ def _make_inference_fn() -> Callable[[str], str]:
     normalizer = _get_normalizer(status.model)
     logger.info("inference: output normalizer=%s", normalizer.__name__)
 
+    chat_template_kwargs = _get_chat_template_kwargs(status.model)
+    logger.info("inference: chat_template_kwargs=%r", chat_template_kwargs)
+
     def _inference(prompt: str) -> str:
         if _PROMPT_USER_MARKER in prompt and _PROMPT_RESPONSE_MARKER in prompt:
             # Shape 1: personal_assistant format — split into system + user turns.
@@ -117,6 +135,7 @@ def _make_inference_fn() -> Callable[[str], str]:
             messages,
             tokenize=False,
             add_generation_prompt=True,
+            **chat_template_kwargs,
         )
         # apply_chat_template already inserts special tokens as text;
         # re-encoding with add_special_tokens=True would double-add them.

@@ -1,3 +1,15 @@
+# Integration tests — HOST ONLY
+#
+# These tests require a live mlx-kv-server on the host machine.
+# They CANNOT run inside the devcontainer: OrbStack's Linux VM cannot
+# connect to macOS Unix sockets even when the socket file is mounted.
+#
+# To run these tests:
+#   cd ~/dev/kai-daemon
+#   uv run pytest tests/test_inference_integration.py -v
+#
+# All other tests (unit + integration-skipped) run normally via tox
+# inside the devcontainer.
 """Integration tests for the _inference closure against live mlx-kv-server.
 
 All tests are skipped automatically when mlx-kv-server is not reachable,
