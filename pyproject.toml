@@ -15,7 +15,7 @@ description = "The daemon — persistent memory, background workflows, and inner
 dependencies = [
     "chromadb>=0.5",
     "fastapi>=0.100",
-    "mlx-kv-client",
+    "mlx-kv-client>=0.0.4",
     "pydantic>=2.0",
     "pyyaml>=6.0",
     "tiktoken>=0.7",
@@ -196,4 +196,3 @@ lint.select = [
 "tests/**/*" = ["SLF001"]
 
 [tool.uv.sources]
-mlx-kv-client = { path = "../mlx-kv-client", editable = true }

@@ -25,11 +25,13 @@ Runs on the M1 Max outside a devcontainer.
 - `mlx-kv-client` — wraps the five mlx-kv-server inference primitives
 - `daemon-memory-client` — wraps all daemon-memory-server API routes
 
-During active development of the clients, install as editable from this
+mlx-kv-client is on PyPI. For active development against a local copy,
+install editable: `uv add --editable ../mlx-kv-client`
+
+daemon-memory-client is not yet on PyPI. Install as editable from this
 devcontainer (siblings are visible at `/workspaces/` via DLS mount):
 
 ```bash
-uv add --editable /workspaces/mlx-kv-client
 uv add --editable /workspaces/daemon-memory-client
 ```
 

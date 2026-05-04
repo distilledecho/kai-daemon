@@ -908,7 +908,7 @@ inference = [
 requires-dist = [
     { name = "chromadb", specifier = ">=0.5" },
     { name = "fastapi", specifier = ">=0.100" },
-    { name = "mlx-kv-client", editable = "../mlx-kv-client" },
+    { name = "mlx-kv-client", specifier = ">=0.0.4" },
     { name = "pydantic", specifier = ">=2.0" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "tiktoken", specifier = ">=0.7" },
@@ -1086,25 +1086,11 @@ wheels = [
 
 [[package]]
 name = "mlx-kv-client"
-source = { editable = "../mlx-kv-client" }
-
-[package.metadata]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "copier" },
-    { name = "myst-parser" },
-    { name = "pre-commit" },
-    { name = "pydata-sphinx-theme", specifier = ">=0.12" },
-    { name = "pyright" },
-    { name = "pytest" },
-    { name = "pytest-cov" },
-    { name = "ruff" },
-    { name = "sphinx-autobuild" },
-    { name = "sphinx-copybutton" },
-    { name = "sphinx-design" },
-    { name = "tox-uv" },
-    { name = "types-mock" },
+version = "0.0.4"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/ee/c6/08ea7a03e40d70822a867f16116db6a344bc332b6db64363ffed605d8671/mlx_kv_client-0.0.4.tar.gz", hash = "sha256:00ab6dadcd84815608c7dda48342c598e34c0425381b74119f0cd0337c31083a", size = 117061, upload-time = "2026-05-04T12:05:54.051Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/37/2b/fb7cd9491dd12496d3628a521ed7648c688f914cf6f0b9796fdd3bf842f6/mlx_kv_client-0.0.4-py3-none-any.whl", hash = "sha256:64be659f171f697a6917fd71192a83d3a51abe06373bb4dd191dbb2aa53e04c3", size = 15200, upload-time = "2026-05-04T12:05:52.966Z" },
 ]
 
 [[package]]
