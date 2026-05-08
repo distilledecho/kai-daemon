@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  launchd user agent — kai-daemon
+  Manages the kai daemon as a persistent macOS user service.
+
+  Install:   launchctl load ~/dev/kai-daemon/com.distilledecho.kai-daemon.plist
+  Uninstall: launchctl unload ~/dev/kai-daemon/com.distilledecho.kai-daemon.plist
+  Logs:      tail -f ~/dev/kai-daemon/logs/stdout.log
+
+  NOTE: ProgramArguments[0] must be the absolute path to uv.
+  Verified location on this machine: /opt/homebrew/bin/uv
+  If uv moves (e.g. after a reinstall), update the path below and reload.
+
+  Dependency note: kai-daemon connects to mlx-kv-server lazily (on first
+  inference call, not at startup). No hard ordering dependency is required.
+  ThrottleInterval of 10s prevents a crash loop if mlx-kv-server is down.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.distilledecho.kai-daemon</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/opt/homebrew/bin/uv</string>
+        <string>run</string>
+        <string>python</string>
+        <string>-m</string>
+        <string>kai_daemon</string>
+        <string>--log-level</string>
+        <string>INFO</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/hiran/dev/kai-daemon</string>
+
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>RunAtLoad</key>
+    <false/>
+
+    <!-- ThrottleInterval prevents rapid crash loops if mlx-kv-server is unavailable -->
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+
+    <key>StandardOutPath</key>
+    <string>/Users/hiran/dev/kai-daemon/logs/stdout.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/hiran/dev/kai-daemon/logs/stderr.log</string>
+</dict>
+</plist>
