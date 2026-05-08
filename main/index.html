@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>kai_daemon &#8212; kai-daemon 0.1.dev101+gdb86fbd28 documentation</title>
+    <title>kai_daemon &#8212; kai-daemon 0.1.dev103+gb4b84b6f4 documentation</title>
   
   
   
@@ -41,7 +41,7 @@
   <link rel="preload" as="script" href="_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf" />
 <link rel="preload" as="script" href="_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf" />
 
-    <script src="_static/documentation_options.js?v=435431e1"></script>
+    <script src="_static/documentation_options.js?v=74eb493e"></script>
     <script src="_static/doctools.js?v=fd6eb6e6"></script>
     <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="_static/clipboard.min.js?v=a7894cd8"></script>
@@ -452,6 +452,55 @@ introductory code here:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">python</span> <span class="o">-</span><span class="n">m</span> <span class="n">kai_daemon</span> <span class="o">--</span><span class="n">version</span>
 </pre></div>
 </div>
+<section id="running-as-a-launchd-service">
+<h2>Running as a launchd Service<a class="headerlink" href="#running-as-a-launchd-service" title="Link to this heading">#</a></h2>
+<p>The recommended way to run kai-daemon in production is as a macOS user agent via launchd. This ensures the daemon restarts automatically after a crash.</p>
+<p>kai-daemon connects to mlx-kv-server <strong>lazily</strong> — on the first inference call, not at startup — so it can be loaded independently of mlx-kv-server’s state.</p>
+<section id="install">
+<h3>Install<a class="headerlink" href="#install" title="Link to this heading">#</a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>launchctl<span class="w"> </span>load<span class="w"> </span>~/dev/kai-daemon/com.distilledecho.kai-daemon.plist
+</pre></div>
+</div>
+<p>This registers the service. The daemon does <strong>not</strong> start immediately (<code class="docutils literal notranslate"><span class="pre">RunAtLoad</span></code> is false) — start it manually after loading:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>launchctl<span class="w"> </span>start<span class="w"> </span>com.distilledecho.kai-daemon
+</pre></div>
+</div>
+</section>
+<section id="stop-start-restart">
+<h3>Stop / Start / Restart<a class="headerlink" href="#stop-start-restart" title="Link to this heading">#</a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Stop (launchd will restart it after ThrottleInterval if KeepAlive is active)</span>
+launchctl<span class="w"> </span>stop<span class="w"> </span>com.distilledecho.kai-daemon
+
+<span class="c1"># To stop permanently without restarting, unload first (see Uninstall below)</span>
+
+<span class="c1"># Start manually</span>
+launchctl<span class="w"> </span>start<span class="w"> </span>com.distilledecho.kai-daemon
+</pre></div>
+</div>
+</section>
+<section id="logs">
+<h3>Logs<a class="headerlink" href="#logs" title="Link to this heading">#</a></h3>
+<p>stdout and stderr are written to separate files:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>tail<span class="w"> </span>-f<span class="w"> </span>~/dev/kai-daemon/logs/stdout.log
+tail<span class="w"> </span>-f<span class="w"> </span>~/dev/kai-daemon/logs/stderr.log
+</pre></div>
+</div>
+</section>
+<section id="uninstall">
+<h3>Uninstall<a class="headerlink" href="#uninstall" title="Link to this heading">#</a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>launchctl<span class="w"> </span>unload<span class="w"> </span>~/dev/kai-daemon/com.distilledecho.kai-daemon.plist
+</pre></div>
+</div>
+<p>This stops the daemon and removes launchd’s awareness of it. The plist file remains on disk; re-load to re-register.</p>
+</section>
+<section id="notes">
+<h3>Notes<a class="headerlink" href="#notes" title="Link to this heading">#</a></h3>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">ThrottleInterval</span></code> is set to 10 seconds. If mlx-kv-server is down, the daemon will crash on its first inference attempt and launchd will restart it after 10 seconds rather than immediately.</p></li>
+<li><p>The plist hardcodes the absolute path to <code class="docutils literal notranslate"><span class="pre">uv</span></code> (<code class="docutils literal notranslate"><span class="pre">/opt/homebrew/bin/uv</span></code>). If uv is reinstalled elsewhere, update <code class="docutils literal notranslate"><span class="pre">ProgramArguments[0]</span></code> in the plist and reload.</p></li>
+</ul>
+</section>
+</section>
 <section id="how-the-documentation-is-structured">
 <h2>How the documentation is structured<a class="headerlink" href="#how-the-documentation-is-structured" title="Link to this heading">#</a></h2>
 <p>Documentation is split into <a class="reference external" href="https://diataxis.fr">four categories</a>, also accessible from links in the top bar.</p>
