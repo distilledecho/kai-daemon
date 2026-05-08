@@ -189,6 +189,20 @@ def make_app(
     async def health() -> dict[str, bool]:
         return {"ok": True}
 
+    @app.get("/v1/models")
+    async def list_models() -> dict[str, Any]:
+        return {
+            "object": "list",
+            "data": [
+                {
+                    "id": "kai",
+                    "object": "model",
+                    "created": 1714000000,
+                    "owned_by": "kai-daemon",
+                }
+            ],
+        }
+
     @app.post("/v1/chat/completions")
     async def chat_completions(request: ChatRequest) -> ChatResponse:
         assistant = _get_assistant()
