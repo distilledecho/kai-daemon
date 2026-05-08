@@ -215,6 +215,25 @@ class TestUpdateCooccurrenceFn:
         conn.close()
         assert count == 2
 
+    def test_concurrent_writes_no_corruption(self, tmp_path: Path) -> None:
+        """Two threads writing simultaneously must each commit their row."""
+        update_fn = make_update_cooccurrence_fn(episodic_root=tmp_path)
+        n = 10
+
+        def _write(i: int) -> None:
+            update_fn(f"sess-{i:02d}", [f"thread-{i:02d}"], [], [])
+
+        threads = [threading.Thread(target=_write, args=(i,)) for i in range(n)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        conn = sqlite3.connect(str(tmp_path / "cooccurrence.db"))
+        count = conn.execute("SELECT COUNT(*) FROM session_cooccurrence").fetchone()[0]
+        conn.close()
+        assert count == n
+
 
 # ---------------------------------------------------------------------------
 # write_handoff_note_fn

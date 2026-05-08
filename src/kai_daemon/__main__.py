@@ -484,7 +484,7 @@ def main(args: Sequence[str] | None = None) -> None:
     def _conv_inference(prompt: str) -> str:
         return _get_inference_fn()(prompt)
 
-    _pa_getter_out: list[Any] = []
+    _pa_getter_out: list[Callable[[], PersonalAssistant | None]] = []
     conv_thread = threading.Thread(
         target=run_conversation_server,
         kwargs={
@@ -529,14 +529,17 @@ def main(args: Sequence[str] | None = None) -> None:
 
     # Trigger session end before the inference function is torn down so that
     # relational_update and episodic_flush can still call the model.
+    # Empty means the conv-server thread never started or never handled
+    # a request — no session to end.
     if _pa_getter_out:
         _pa: PersonalAssistant | None = _pa_getter_out[0]()
         if _pa is not None:
             logger.info("daemon: triggering session end before shutdown")
+            non_null_pa: PersonalAssistant = _pa
 
             def _run_session_end() -> None:
                 try:
-                    _pa.end_session()  # type: ignore[union-attr]
+                    non_null_pa.end_session()
                 except Exception:
                     logger.warning(
                         "daemon: session end raised during shutdown", exc_info=True
@@ -550,6 +553,8 @@ def main(args: Sequence[str] | None = None) -> None:
                     "daemon: session end timed out after 120 s"
                     " — proceeding with shutdown"
                 )
+            else:
+                logger.info("daemon: session end completed")
         else:
             logger.info("daemon: no active session — skipping session end")
 

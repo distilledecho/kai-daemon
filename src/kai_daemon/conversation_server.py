@@ -365,6 +365,7 @@ def run_conversation_server(
     )
 
     if _getter_out is not None:
+        # list used as an out-parameter because thread targets cannot return values
         _getter_out.append(getter)
 
     uvicorn.run(app, host=host, port=port)

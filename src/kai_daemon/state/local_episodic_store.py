@@ -20,6 +20,7 @@ import sqlite3
 import threading
 from collections import defaultdict
 from pathlib import Path
+from typing import Any
 
 from ..workflows.episodic_flush import (
     UpdateCooccurrenceFn,
@@ -50,7 +51,7 @@ def _lock_for(path: Path) -> threading.Lock:
 # ---------------------------------------------------------------------------
 
 
-def _append_jsonl(path: Path, record: dict) -> None:  # type: ignore[type-arg]
+def _append_jsonl(path: Path, record: dict[str, Any]) -> None:
     """Append one JSON line to *path* under a per-path lock.
 
     Creates parent directories and the file if they do not exist.
@@ -132,6 +133,12 @@ def make_update_cooccurrence_fn(
                         artifact_id  TEXT,
                         inquiry_id   TEXT
                     )
+                    """
+                )
+                conn.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_session_id
+                    ON session_cooccurrence (session_id)
                     """
                 )
                 rows = (
