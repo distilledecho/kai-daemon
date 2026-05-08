@@ -34,7 +34,7 @@ def _make_app(tmp: Path) -> object:
         assert isinstance(wm, WorkingMemory)
         return SessionEndResult(session_id=wm.session_id, flush_succeeded=True)
 
-    return make_app(
+    app, _getter = make_app(
         inference_fn=lambda p: "test response",
         memory_client=None,
         holding_store=HoldingStore(tmp / "holding.yaml"),
@@ -51,6 +51,7 @@ def _make_app(tmp: Path) -> object:
         score_discharge_items_fn=lambda m, i: {},
         session_end_fn=_se,
     )
+    return app
 
 
 # ---------------------------------------------------------------------------

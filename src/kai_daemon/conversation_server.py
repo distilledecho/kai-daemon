@@ -12,6 +12,8 @@ from __future__ import annotations
 import logging
 import threading
 import uuid
+from collections.abc import Callable
+from datetime import datetime
 from pathlib import Path
 from typing import Any, cast
 
@@ -95,7 +97,7 @@ def make_app(
     correction_history: list[RegisterCorrectionEntry],
     score_discharge_items_fn: ScoreDischargeItemsFn,
     session_end_fn: SessionEndFn,
-) -> FastAPI:
+) -> tuple[FastAPI, Callable[[], PersonalAssistant | None]]:
     """Create and return the conversation FastAPI application.
 
     All :class:`PersonalAssistant` dependencies are accepted explicitly for
@@ -136,7 +138,7 @@ def make_app(
         >>> from kai_daemon.conversation_server import make_app
         >>> with tempfile.TemporaryDirectory() as d:
         ...     dp = Path(d)
-        ...     app = make_app(
+        ...     app, _getter = make_app(
         ...         inference_fn=lambda p: "ok",
         ...         memory_client=None,
         ...         holding_store=HoldingStore(dp / "h.yaml"),
@@ -185,6 +187,10 @@ def make_app(
                 return pa
             return _app_state[0]  # type: ignore[return-value]
 
+    def _getter() -> PersonalAssistant | None:
+        with _app_lock:
+            return _app_state[0]
+
     @app.get("/health")
     async def health() -> dict[str, bool]:
         return {"ok": True}
@@ -227,7 +233,7 @@ def make_app(
             ],
         )
 
-    return app
+    return app, _getter
 
 
 # ---------------------------------------------------------------------------
@@ -240,6 +246,7 @@ def run_conversation_server(
     *,
     host: str = "0.0.0.0",
     port: int = 9272,
+    _getter_out: list[Callable[[], PersonalAssistant | None]] | None = None,
 ) -> None:
     """Start the conversation HTTP server, blocking until stopped.
 
@@ -251,6 +258,10 @@ def run_conversation_server(
         inference_fn: Inference callable ``(prompt: str) → str``.
         host: Bind address (default ``0.0.0.0``).
         port: HTTP port (default 9272).
+        _getter_out: Internal.  If provided, the PersonalAssistant getter
+            is appended to this list immediately after ``make_app`` returns
+            (before uvicorn blocks).  Callers can then retrieve the
+            ``PersonalAssistant`` via ``_getter_out[0]()``.
     """
     import yaml
 
@@ -261,6 +272,18 @@ def run_conversation_server(
         logs_dir,
         pickup_notes_dir,
         threads_dir,
+    )
+    from .state.local_episodic_store import (
+        make_update_cooccurrence_fn,
+        make_write_handoff_note_fn,
+        make_write_session_record_fn,
+        make_write_session_thread_index_fn,
+        make_write_thread_episode_fn,
+    )
+    from .workflows.session_end import (
+        make_episodic_flush_fn,
+        make_relational_update_fn,
+        run_session_end,
     )
 
     state_dir = daemon_state_dir()
@@ -296,12 +319,25 @@ def run_conversation_server(
     def _zero_scores(_message: str, _items: list[HoldingItem]) -> dict[str, float]:
         return {}
 
-    # TODO: wire real episodic_flush here; flush_succeeded=True bypasses the
-    # working-memory gate (memory is cleared even when the memory server is down).
-    def _simple_session_end(wm: WorkingMemory, _dt: Any) -> SessionEndResult:
-        return SessionEndResult(session_id=wm.session_id, flush_succeeded=True)
+    _relational_update_fn = make_relational_update_fn(inference_fn)
+    _episodic_flush_fn = make_episodic_flush_fn(
+        inference_fn=inference_fn,
+        write_thread_episode_fn=make_write_thread_episode_fn(),
+        update_cooccurrence_fn=make_update_cooccurrence_fn(),
+        write_handoff_note_fn=make_write_handoff_note_fn(),
+        write_session_record_fn=make_write_session_record_fn(),
+        write_session_thread_index_fn=make_write_session_thread_index_fn(),
+    )
 
-    app = make_app(
+    def _real_session_end(wm: WorkingMemory, dt: datetime) -> SessionEndResult:
+        return run_session_end(
+            wm,
+            dt,
+            relational_update_fn=_relational_update_fn,
+            episodic_flush_fn=_episodic_flush_fn,
+        )
+
+    app, getter = make_app(
         inference_fn=inference_fn,
         # TODO: wire daemon-memory-client here; retrieval is disabled until then.
         memory_client=None,
@@ -325,6 +361,11 @@ def run_conversation_server(
         discharge_threshold=discharge_threshold,
         correction_history=[],
         score_discharge_items_fn=_zero_scores,
-        session_end_fn=_simple_session_end,
+        session_end_fn=_real_session_end,
     )
+
+    if _getter_out is not None:
+        # list used as an out-parameter because thread targets cannot return values
+        _getter_out.append(getter)
+
     uvicorn.run(app, host=host, port=port)

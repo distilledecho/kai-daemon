@@ -66,3 +66,10 @@ def daemon_relational_history_dir() -> Path:
     p = daemon_state_dir() / "daemon_relational_history"
     p.mkdir(parents=True, exist_ok=True)
     return p
+
+
+def episodic_dir() -> Path:
+    """data/episodic/ — local episodic store."""
+    p = data_dir() / "episodic"
+    p.mkdir(parents=True, exist_ok=True)
+    return p
